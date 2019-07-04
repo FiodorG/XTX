@@ -61,7 +61,7 @@ class MySubmission(Submission):
     """
     def update_data(self, data):
         self._df0.loc[len(self._df0)] = data
-        self._df0 = self._df0.tail(10000)
+        self._df0 = self._df0.tail(2000)
 
     """
     update_features(self) update features after each new line is added
