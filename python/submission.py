@@ -53,22 +53,20 @@ class MySubmission(Submission):
 
     def __init__(self):
         self._turn = 0
-        self._df0 = pd.DataFrame(columns=['askRate%.0f' % i for i in range(0, 15)] + ['askSize%.0f' % i for i in range(0, 15)] + ['bidRate%.0f' % i for i in range(0, 15)] + ['bidSize%.0f' % i for i in range(0, 15)])
+        self._df = pd.DataFrame(columns=['askRate%.0f' % i for i in range(0, 15)] + ['askSize%.0f' % i for i in range(0, 15)] + ['bidRate%.0f' % i for i in range(0, 15)] + ['bidSize%.0f' % i for i in range(0, 15)])
         super().__init__()
 
     """
     update_data(data) appends new row to existing dataframe
     """
     def update_data(self, data):
-        self._df0.loc[len(self._df0)] = data
-        self._df0 = self._df0.tail(2000)
+        self._df.loc[len(self._df), 0:60] = data
+        self._df = self._df.tail(2000)
 
     """
     update_features(self) update features after each new line is added
     """
     def update_features(self):
-        self._df = self._df0.copy()
-
         self._df['mid'] = (self._df.askRate0 + self._df.bidRate0) * 0.5
         self._df['sig1'] = self._df.bidSize0.fillna(0) - self._df.askSize0.fillna(0)
         self._df['sig2'] = self._df.bidSize1.fillna(0) - self._df.askSize1.fillna(0)
