@@ -67,11 +67,14 @@ class MySubmission(Submission):
     update_features(self) update features after each new line is added
     """
     def update_features(self):
-        self._df['mid'] = (self._df.askRate0 + self._df.bidRate0) * 0.5
         self._df['sig1'] = self._df.bidSize0.fillna(0) - self._df.askSize0.fillna(0)
-        self._df['sig2'] = self._df.bidSize1.fillna(0) - self._df.askSize1.fillna(0)
-        self._df['sig_mom_1'] = self._df.mid - self._df.mid.ewm(span=12).mean()
-        self._df['sig_mom_2'] = self._df.mid - self._df.mid.ewm(span=1500).mean()
+        self._df['bidSize'] = self._df.bidSize0.fillna(0) + self._df.bidSize1.fillna(0)
+        self._df['askSize'] = self._df.askSize0.fillna(0) + self._df.askSize1.fillna(0)
+        self._df['sig3'] = (self._df['bidSize'] - self._df['askSize']) - (self._df['bidSize'] - self._df['askSize']).ewm(span=50).mean()
+
+        self._df['wgt_mid'] = (self._df.bidRate0 * self._df['bidSize0'] + self._df.askRate0 * self._df['askSize0']) / (self._df['bidSize0'] + self._df['askSize0'])
+        self._df['mid_chg_momentum_1'] = self._df['wgt_mid'] - self._df['wgt_mid'].ewm(span=12).mean()
+        self._df['mid_chg_momentum_2'] = self._df['wgt_mid'] - self._df['wgt_mid'].ewm(span=1500).mean()
 
         self._row = self._df.tail(1).to_dict(orient='records')[0]
 
@@ -80,8 +83,7 @@ class MySubmission(Submission):
        prediction for the supplied row of data
     """
     def get_prediction(self):
-        # return 0.0025 * self._row['sig1'] + 0.0010 * self._row['sig2']
-	    return 0.0022 * self._row['sig1'] + 0.00075 * self._row['sig2'] - 0.14 * self._row['sig_mom_1'] - 0.01 * self._row['sig_mom_2']
+	    return 0.00136 * self._row['sig1'] + 0.00263 * self._row['sig3'] - 0.12031 * self._row['mid_chg_momentum_1'] - 0.01448 * self._row['mid_chg_momentum_2']
 
     """
     run_submission() will iteratively fetch the next row of data in the format 
