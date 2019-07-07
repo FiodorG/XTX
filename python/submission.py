@@ -1,5 +1,5 @@
 import subprocess
-import math
+import math, pickle
 import pandas as pd
 import numpy as np
 from core import Submission
@@ -52,38 +52,60 @@ Implement the model below
 class MySubmission(Submission):
 
     def __init__(self):
-        self._turn = 0
-        self._df = pd.DataFrame(columns=['askRate%.0f' % i for i in range(0, 15)] + ['askSize%.0f' % i for i in range(0, 15)] + ['bidRate%.0f' % i for i in range(0, 15)] + ['bidSize%.0f' % i for i in range(0, 15)])
+        self.turn = 0
+
+        self.alpha_12 = 0.15384615384 # 2 / (12 + 1)
+        self.alpha_50 = 0.03921568627 # 2 / (50 + 1)
+        self.alpha_1500 = 0.00133244503 # 2 / (1500 + 1)
+
         super().__init__()
 
     """
     update_data(data) appends new row to existing dataframe
     """
-    def update_data(self, data):
-        self._df.loc[len(self._df), 0:60] = data
-        self._df = self._df.tail(2000)
+    def update_data(self):
+
+        data = self.get_next_data_as_string()
+        data = [float(x) if x else 0 for x in data.split(',')]
+        self.x = data
 
     """
     update_features(self) update features after each new line is added
     """
     def update_features(self):
-        self._df['sig1'] = self._df.bidSize0.fillna(0) - self._df.askSize0.fillna(0)
-        self._df['bidSize'] = self._df.bidSize0.fillna(0) + self._df.bidSize1.fillna(0)
-        self._df['askSize'] = self._df.askSize0.fillna(0) + self._df.askSize1.fillna(0)
-        self._df['sig3'] = (self._df['bidSize'] - self._df['askSize']) - (self._df['bidSize'] - self._df['askSize']).ewm(span=50).mean()
 
-        self._df['wgt_mid'] = (self._df.bidRate0 * self._df['bidSize0'] + self._df.askRate0 * self._df['askSize0']) / (self._df['bidSize0'] + self._df['askSize0'])
-        self._df['mid_chg_momentum_1'] = self._df['wgt_mid'] - self._df['wgt_mid'].ewm(span=12).mean()
-        self._df['mid_chg_momentum_2'] = self._df['wgt_mid'] - self._df['wgt_mid'].ewm(span=1500).mean()
+        x = self.x
 
-        self._row = self._df.tail(1).to_dict(orient='records')[0]
+        bidSize0 = x[45]
+        bidSize1 = x[46]
+        askSize0 = x[15]
+        askSize1 = x[16]
+
+        if self.turn == 0:
+            self.bidSize0_ewma50 = bidSize0
+            self.askSize0_ewma50 = askSize0
+            self.bidSize1_ewma50 = bidSize1
+            self.askSize1_ewma50 = askSize1
+        else:
+            self.bidSize0_ewma50 = (1. - self.alpha_50) * self.bidSize0_ewma50 + self.alpha_50 * bidSize0
+            self.askSize0_ewma50 = (1. - self.alpha_50) * self.askSize0_ewma50 + self.alpha_50 * askSize0
+            self.bidSize1_ewma50 = (1. - self.alpha_50) * self.bidSize1_ewma50 + self.alpha_50 * bidSize1
+            self.askSize1_ewma50 = (1. - self.alpha_50) * self.askSize1_ewma50 + self.alpha_50 * askSize1
+
+        #### Signals ####
+        self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
+        self.sig2 = (bidSize1 - askSize1) / (bidSize1 + askSize1)
+        self.sig3 = ((bidSize0 + bidSize1 - askSize0 - askSize1) - (self.bidSize0_ewma50 + self.bidSize1_ewma50 - self.askSize0_ewma50 - self.askSize1_ewma50)) / (self.bidSize0_ewma50 + self.bidSize1_ewma50 + self.askSize0_ewma50 + self.askSize1_ewma50)
+
+        return
 
     """
     get_prediction(data) expects a row of data from data.csv as input and should return a float that represents a
        prediction for the supplied row of data
     """
     def get_prediction(self):
-	    return 0.00136 * self._row['sig1'] + 0.00263 * self._row['sig3'] - 0.12031 * self._row['mid_chg_momentum_1'] - 0.01448 * self._row['mid_chg_momentum_2']
+
+        return 0.1129517 * self.sig1 + 0.0473266 * self.sig2 + 0.1255037 * self.sig3
 
     """
     run_submission() will iteratively fetch the next row of data in the format 
@@ -95,28 +117,14 @@ class MySubmission(Submission):
         self.debug_print("Use the print function `self.debug_print(...)` for debugging purposes, do NOT use the default `print(...)`")
 
         while(True):
-            """
-            NOTE: Only one of (get_next_data_as_string, get_next_data_as_list, get_next_data_as_numpy_array) can be used
-            to get the row of data, please refer to the `OVERVIEW OF DATA` section above.
-
-            Uncomment the one that will be used, and comment the others.
-            """
-
-            data = self.get_next_data_as_list()
-            # data = self.get_next_data_as_numpy_array()
-            # data = self.get_next_data_as_string()
-
-            self.update_data(data)
+            self.update_data()
             self.update_features()
             prediction = self.get_prediction()
 
-            """
-            submit_prediction(prediction) MUST be used to submit your prediction for the current row of data
-            """
             #debug = str(self._df0.iloc[-1]).replace(' ', '').replace('\n', '/')
-            #debug = str(self._df.sig1)
             self.submit_prediction(prediction)
-            self._turn += 1
+
+            self.turn += 1
 
 
 if __name__ == "__main__":
