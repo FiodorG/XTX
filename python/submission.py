@@ -1,7 +1,6 @@
-import subprocess
-import math, pickle
-import pandas as pd
+import math, pickle, subprocess, time
 import numpy as np
+from collections import deque
 from core import Submission
 
 """
@@ -53,10 +52,14 @@ class MySubmission(Submission):
 
     def __init__(self):
         self.turn = 0
+        self.ARRAY_SIZE = 5000000
 
         self.alpha_12 = 0.15384615384 # 2 / (12 + 1)
         self.alpha_50 = 0.03921568627 # 2 / (50 + 1)
+        self.alpha_500 = 0.00399201596 # 2 / (500 + 1)
         self.alpha_1500 = 0.00133244503 # 2 / (1500 + 1)
+
+        self.mids = np.zeros(self.ARRAY_SIZE)
 
         super().__init__()
 
@@ -69,24 +72,42 @@ class MySubmission(Submission):
         data = [float(x) if x else 0 for x in data.split(',')]
         self.x = data
 
+        if self.turn == self.ARRAY_SIZE - 10:
+            self.mids.resize(2 * self.ARRAY_SIZE)
+
     """
     update_features(self) update features after each new line is added
     """
     def update_features(self):
 
         x = self.x
+        turn = self.turn
 
-        bidSize0 = x[45]
-        bidSize1 = x[46]
+        askRate0 = x[0]
+        bidRate0 = x[30]
+
         askSize0 = x[15]
         askSize1 = x[16]
+        bidSize0 = x[45]
+        bidSize1 = x[46]
+
+        #mid = 0.5 * (bidRate0 + askRate0)
+        mid_wgt = (bidRate0 * bidSize0 + askRate0 * askSize0) / (bidSize0 + askSize0)
+        y = mid_wgt - self.mids[max(turn - 87, 0)]
+        self.mids[turn] = mid_wgt
 
         if self.turn == 0:
+            self.y_var_ewma500 = 0.18
+            self.y_vol_ewma500 = math.sqrt(0.18)
+
             self.bidSize0_ewma50 = bidSize0
             self.askSize0_ewma50 = askSize0
             self.bidSize1_ewma50 = bidSize1
             self.askSize1_ewma50 = askSize1
         else:
+            self.y_var_ewma500 = (1. - self.alpha_500) * (self.y_var_ewma500 + self.alpha_500 * y * y)
+            self.y_vol_ewma500 = math.sqrt(self.y_var_ewma500)
+
             self.bidSize0_ewma50 = (1. - self.alpha_50) * self.bidSize0_ewma50 + self.alpha_50 * bidSize0
             self.askSize0_ewma50 = (1. - self.alpha_50) * self.askSize0_ewma50 + self.alpha_50 * askSize0
             self.bidSize1_ewma50 = (1. - self.alpha_50) * self.bidSize1_ewma50 + self.alpha_50 * bidSize1
@@ -96,6 +117,7 @@ class MySubmission(Submission):
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
         self.sig2 = (bidSize1 - askSize1) / (bidSize1 + askSize1)
         self.sig3 = ((bidSize0 + bidSize1 - askSize0 - askSize1) - (self.bidSize0_ewma50 + self.bidSize1_ewma50 - self.askSize0_ewma50 - self.askSize1_ewma50)) / (self.bidSize0_ewma50 + self.bidSize1_ewma50 + self.askSize0_ewma50 + self.askSize1_ewma50)
+        self.sig4 = bidSize1 / bidSize0 - askSize1 / askSize0
 
         return
 
@@ -105,7 +127,9 @@ class MySubmission(Submission):
     """
     def get_prediction(self):
 
-        return 0.1129517 * self.sig1 + 0.0473266 * self.sig2 + 0.1255037 * self.sig3
+        # Huber, no weight, full period, sig1, 2, 3, 4
+        return 0.10294334395250752 * self.sig1 + 0.059156144384928985 * self.sig2 + 0.12606677329787516 * self.sig3 - 0.0008926317420901092 * self.sig4
+
 
     """
     run_submission() will iteratively fetch the next row of data in the format 
@@ -114,14 +138,14 @@ class MySubmission(Submission):
     """
     def run_submission(self):
 
-        self.debug_print("Use the print function `self.debug_print(...)` for debugging purposes, do NOT use the default `print(...)`")
-
         while(True):
+            #start = time.time()
             self.update_data()
             self.update_features()
             prediction = self.get_prediction()
 
-            #debug = str(self._df0.iloc[-1]).replace(' ', '').replace('\n', '/')
+            #end = time.time()
+            #prediction = (end - start) * 1000
             self.submit_prediction(prediction)
 
             self.turn += 1
