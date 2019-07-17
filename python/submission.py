@@ -53,7 +53,7 @@ class MySubmission(Submission):
     def __init__(self):
         self.turn = 0
         self.ARRAY_SIZE = 5000000
-        self.widrow_hoff_alpha = 0.00001
+        self.widrow_hoff_alpha = 0.0002
 
         self.alpha_12 = 0.15384615384 # 2 / (12 + 1)
         self.alpha_50 = 0.03921568627 # 2 / (50 + 1)
@@ -62,6 +62,7 @@ class MySubmission(Submission):
 
         # Huber, no weight, full period, sig1, 2, 3
         self.coeffs = np.array([0.051729141649204995, 0.08709222681091586, 0.04380669075741997, -0.0009319557152674777, 0.03797981861642649])
+        self.coeffs_widrow_hoff = self.coeffs
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
@@ -143,8 +144,8 @@ class MySubmission(Submission):
 
         self.signals[turn, :] = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5])
 
-        #if turn > 87:
-            #self.coeffs = self.coeffs - self.widrow_hoff_alpha * (self.y_pred[turn_prev] - self.y[turn_prev]) * self.signals[turn_prev]
+        if turn > 87:
+            self.coeffs_widrow_hoff = self.coeffs_widrow_hoff - self.widrow_hoff_alpha * (self.y_pred[turn_prev] - self.y[turn_prev]) * self.signals[turn_prev]
 
         return
 
@@ -153,7 +154,7 @@ class MySubmission(Submission):
        prediction for the supplied row of data
     """
     def get_prediction(self):
-        prediction = np.dot(self.signals[self.turn], self.coeffs)
+        prediction = 0.5 * (np.dot(self.signals[self.turn], self.coeffs) + np.dot(self.signals[self.turn], self.coeffs_widrow_hoff))
         self.y_pred[self.turn] = prediction
         return prediction
 
