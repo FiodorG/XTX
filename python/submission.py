@@ -53,13 +53,20 @@ class MySubmission(Submission):
     def __init__(self):
         self.turn = 0
         self.ARRAY_SIZE = 5000000
+        self.widrow_hoff_alpha = 0.00001
 
         self.alpha_12 = 0.15384615384 # 2 / (12 + 1)
         self.alpha_50 = 0.03921568627 # 2 / (50 + 1)
         self.alpha_500 = 0.00399201596 # 2 / (500 + 1)
         self.alpha_1500 = 0.00133244503 # 2 / (1500 + 1)
 
+        # Huber, no weight, full period, sig1, 2, 3
+        self.coeffs = np.array([0.051729141649204995, 0.08709222681091586, 0.04380669075741997, -0.0009319557152674777, 0.03797981861642649])
+
         self.mids = np.zeros(self.ARRAY_SIZE)
+        self.y = np.zeros(self.ARRAY_SIZE)
+        self.y_pred = np.zeros(self.ARRAY_SIZE)
+        self.signals = np.zeros((self.ARRAY_SIZE, len(self.coeffs)))
 
         super().__init__()
 
@@ -74,6 +81,9 @@ class MySubmission(Submission):
 
         if self.turn == self.ARRAY_SIZE - 10:
             self.mids.resize(2 * self.ARRAY_SIZE)
+            self.y.resize(2 * self.ARRAY_SIZE)
+            self.y_pred.resize(2 * self.ARRAY_SIZE)
+            self.signals.resize(2 * self.ARRAY_SIZE)
 
     """
     update_features(self) update features after each new line is added
@@ -82,6 +92,7 @@ class MySubmission(Submission):
 
         x = self.x
         turn = self.turn
+        turn_prev = max(turn - 87, 0)
 
         askRate0 = x[0]
         bidRate0 = x[30]
@@ -91,14 +102,19 @@ class MySubmission(Submission):
         bidSize0 = x[45]
         bidSize1 = x[46]
 
-        #mid = 0.5 * (bidRate0 + askRate0)
-        mid_wgt = (bidRate0 * bidSize0 + askRate0 * askSize0) / (bidSize0 + askSize0)
-        y = mid_wgt - self.mids[max(turn - 87, 0)]
-        self.mids[turn] = mid_wgt
+        mid = 0.5 * (bidRate0 + askRate0)
+        y = mid - self.mids[turn_prev]
+        self.mids[turn] = mid
+        self.y[turn_prev] = y
 
         if self.turn == 0:
             self.y_var_ewma500 = 0.18
             self.y_vol_ewma500 = math.sqrt(0.18)
+
+            self.bidSize0_var_ewma50 = 2.
+            self.askSize0_var_ewma50 = 5.
+            self.bidSize0_vol_ewma50 = math.sqrt(2.)
+            self.askSize0_vol_ewma50 = math.sqrt(5.)
 
             self.bidSize0_ewma50 = bidSize0
             self.askSize0_ewma50 = askSize0
@@ -107,6 +123,11 @@ class MySubmission(Submission):
         else:
             self.y_var_ewma500 = (1. - self.alpha_500) * (self.y_var_ewma500 + self.alpha_500 * y * y)
             self.y_vol_ewma500 = math.sqrt(self.y_var_ewma500)
+
+            self.bidSize0_var_ewma50 = (1. - self.alpha_50) * (self.bidSize0_var_ewma50 + self.alpha_50 * bidSize0 * bidSize0)
+            self.askSize0_var_ewma50 = (1. - self.alpha_50) * (self.askSize0_var_ewma50 + self.alpha_50 * askSize0 * askSize0)
+            self.bidSize0_vol_ewma50 = math.sqrt(self.bidSize0_var_ewma50)
+            self.askSize0_vol_ewma50 = math.sqrt(self.askSize0_var_ewma50)
 
             self.bidSize0_ewma50 = (1. - self.alpha_50) * self.bidSize0_ewma50 + self.alpha_50 * bidSize0
             self.askSize0_ewma50 = (1. - self.alpha_50) * self.askSize0_ewma50 + self.alpha_50 * askSize0
@@ -118,6 +139,12 @@ class MySubmission(Submission):
         self.sig2 = (bidSize1 - askSize1) / (bidSize1 + askSize1)
         self.sig3 = ((bidSize0 + bidSize1 - askSize0 - askSize1) - (self.bidSize0_ewma50 + self.bidSize1_ewma50 - self.askSize0_ewma50 - self.askSize1_ewma50)) / (self.bidSize0_ewma50 + self.bidSize1_ewma50 + self.askSize0_ewma50 + self.askSize1_ewma50)
         self.sig4 = bidSize1 / bidSize0 - askSize1 / askSize0
+        self.sig5 = (bidSize0 - self.bidSize0_ewma50) / self.bidSize0_vol_ewma50 - (askSize0 - self.askSize0_ewma50) / self.askSize0_vol_ewma50
+
+        self.signals[turn, :] = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5])
+
+        #if turn > 87:
+            #self.coeffs = self.coeffs - self.widrow_hoff_alpha * (self.y_pred[turn_prev] - self.y[turn_prev]) * self.signals[turn_prev]
 
         return
 
@@ -126,9 +153,9 @@ class MySubmission(Submission):
        prediction for the supplied row of data
     """
     def get_prediction(self):
-
-        # Huber, no weight, full period, sig1, 2, 3, 4
-        return 0.10294334395250752 * self.sig1 + 0.059156144384928985 * self.sig2 + 0.12606677329787516 * self.sig3 - 0.0008926317420901092 * self.sig4
+        prediction = np.dot(self.signals[self.turn], self.coeffs)
+        self.y_pred[self.turn] = prediction
+        return prediction
 
 
     """
