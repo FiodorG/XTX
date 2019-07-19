@@ -62,7 +62,7 @@ class MySubmission(Submission):
         self.alpha_1500 = 0.00133244503 # 2 / (1500 + 1)
 
         # Huber, no weight, full period
-        self.coeffs = np.array([0.06025795340779726, 0.06824370755883254, 0.024676755706875043, -0.0007263688063172704, 0.022033843392049956])
+        self.coeffs = np.array([0.051729141649204995, 0.08709222681091586, 0.04380669075741997, -0.0009319557152674777, 0.03797981861642649])
         self.coeffs_widrow_hoff = self.coeffs
 
         self.mids = np.zeros(self.ARRAY_SIZE)
@@ -97,10 +97,10 @@ class MySubmission(Submission):
         turn = self.turn
         turn_prev = max(turn - 87, 0)
 
-        askRate0 = x[0]
-        askRate1 = x[1]
-        bidRate0 = x[30]
-        bidRate1 = x[31]
+        askRate0 = x[0] if x[0] != 0 else np.nan
+        askRate1 = x[1] if x[1] != 0 else np.nan
+        bidRate0 = x[30] if x[30] != 0 else np.nan
+        bidRate1 = x[31] if x[31] != 0 else np.nan
 
         askSize0 = x[15]
         askSize1 = x[16]
@@ -181,10 +181,11 @@ class MySubmission(Submission):
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
         self.sig2 = (bidSize1 - askSize1) / (bidSize1 + askSize1)
-        self.sig3 = (bidSize01 - self.bidSize01_ewma50) / self.bidSize01_vol_ewma50 - (askSize01 - self.askSize01_ewma50) / self.askSize01_vol_ewma50
+        self.sig3 = ((bidSize0 + bidSize1 - askSize0 - askSize1) - (self.bidSize0_ewma50 + self.bidSize1_ewma50 - self.askSize0_ewma50 - self.askSize1_ewma50)) / (self.bidSize0_ewma50 + self.bidSize1_ewma50 + self.askSize0_ewma50 + self.askSize1_ewma50)
         self.sig4 = bidSize1 / bidSize0 - askSize1 / askSize0
         self.sig5 = (bidSize0 - self.bidSize0_ewma50) / self.bidSize0_vol_ewma50 - (askSize0 - self.askSize0_ewma50) / self.askSize0_vol_ewma50
         self.sig6 = (bidSizeTotal - self.bidSizeTotal_ewma20) / self.bidSizeTotal_vol_ewma20 - (askSizeTotal - self.askSizeTotal_ewma20) / self.askSizeTotal_vol_ewma20
+        self.sig7 = (askRate1 - askRate0 - 0.5) - (bidRate0 - bidRate1 - 0.5)
 
         signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5])
         signals[np.isinf(signals)] = 0
@@ -203,9 +204,13 @@ class MySubmission(Submission):
     def get_prediction(self):
         prediction = np.dot(self.signals[self.turn], self.coeffs)
 
+        if np.isfinite(self.sig7) and self.sig7 != 0.:
+            prediction += 0.2921203942315244 * self.sig7
+
         if not np.isfinite(prediction):
             prediction = 0
 
+        prediction = np.clip(prediction, -5., 5.)
         self.y_pred[self.turn] = prediction
         return prediction
 
