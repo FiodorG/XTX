@@ -62,7 +62,7 @@ class MySubmission(Submission):
         self.alpha_1500 = 0.00133244503 # 2 / (1500 + 1)
 
         # Huber, no weight, full period
-        self.coeffs = np.array([0.0621675977262991, 0.06889077013483846, 0.01725529228715379, -0.0006399724706248759, 0.01760332916701904, 0.02165824350590642])
+        self.coeffs = np.array([0.06025795340779726, 0.06824370755883254, 0.024676755706875043, -0.0007263688063172704, 0.022033843392049956])
         self.coeffs_widrow_hoff = self.coeffs
 
         self.mids = np.zeros(self.ARRAY_SIZE)
@@ -86,6 +86,7 @@ class MySubmission(Submission):
             self.y.resize(2 * len(self.y))
             self.y_pred.resize(2 * len(self.y_pred))
             self.signals.resize(2 * len(self.signals))
+            self.ARRAY_SIZE = 2 * self.ARRAY_SIZE
 
     """
     update_features(self) update features after each new line is added
@@ -97,7 +98,9 @@ class MySubmission(Submission):
         turn_prev = max(turn - 87, 0)
 
         askRate0 = x[0]
+        askRate1 = x[1]
         bidRate0 = x[30]
+        bidRate1 = x[31]
 
         askSize0 = x[15]
         askSize1 = x[16]
@@ -183,7 +186,10 @@ class MySubmission(Submission):
         self.sig5 = (bidSize0 - self.bidSize0_ewma50) / self.bidSize0_vol_ewma50 - (askSize0 - self.askSize0_ewma50) / self.askSize0_vol_ewma50
         self.sig6 = (bidSizeTotal - self.bidSizeTotal_ewma20) / self.bidSizeTotal_vol_ewma20 - (askSizeTotal - self.askSizeTotal_ewma20) / self.askSizeTotal_vol_ewma20
 
-        self.signals[turn, :] = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5])
+        signals[np.isinf(signals)] = 0
+        signals[np.isnan(signals)] = 0
+        self.signals[turn, :] = signals
 
         #if turn > 87:
         #    self.coeffs_widrow_hoff = self.coeffs_widrow_hoff - self.widrow_hoff_alpha * (self.y_pred[turn_prev] - self.y[turn_prev]) * self.signals[turn_prev]
@@ -196,6 +202,10 @@ class MySubmission(Submission):
     """
     def get_prediction(self):
         prediction = np.dot(self.signals[self.turn], self.coeffs)
+
+        if not np.isfinite(prediction):
+            prediction = 0
+
         self.y_pred[self.turn] = prediction
         return prediction
 
