@@ -1,6 +1,6 @@
 import math, pickle, subprocess, time
 import numpy as np
-from collections import deque
+import pandas as pd
 from core import Submission
 
 """
@@ -53,7 +53,6 @@ class MySubmission(Submission):
     def __init__(self):
         self.turn = 0
         self.ARRAY_SIZE = 5000000
-        self.widrow_hoff_alpha = 0.0002
 
         self.alpha_12 = 0.15384615384 # 2 / (12 + 1)
         self.alpha_20 = 0.095238095 # 2 / (20 + 1)
@@ -62,13 +61,14 @@ class MySubmission(Submission):
         self.alpha_1500 = 0.00133244503 # 2 / (1500 + 1)
 
         # Huber, no weight, full period
-        self.coeffs = np.array([0.051729141649204995, 0.08709222681091586, 0.04380669075741997, -0.0009319557152674777, 0.03797981861642649])
-        self.coeffs_widrow_hoff = np.array([0.08965540011938841, 0.04052626538236564, 0.03893659245629264])
+        self.coeffs = np.array([0.051729141649204995, 0.08709222681091586, 0.04380669075741997, -0.0009319557152674777, 0.03797981861642649, 0])
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
         self.y_pred = np.zeros(self.ARRAY_SIZE)
         self.signals = np.zeros((self.ARRAY_SIZE, len(self.coeffs)))
+
+        self.model = pickle.load(open('model.sav', 'rb'))
 
         super().__init__()
 
@@ -187,13 +187,10 @@ class MySubmission(Submission):
         self.sig6 = (bidSizeTotal - self.bidSizeTotal_ewma20) / self.bidSizeTotal_vol_ewma20 - (askSizeTotal - self.askSizeTotal_ewma20) / self.askSizeTotal_vol_ewma20
         self.sig7 = (askRate1 - askRate0 - 0.5) - (bidRate0 - bidRate1 - 0.5)
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig7])
         signals[np.isinf(signals)] = 0
         signals[np.isnan(signals)] = 0
         self.signals[turn, :] = signals
-
-        if turn > 87:
-            self.coeffs_widrow_hoff = self.coeffs_widrow_hoff - self.widrow_hoff_alpha * (self.y_pred[turn_prev] - self.y[turn_prev]) * self.signals[turn_prev, 0:3]
 
         return
 
@@ -202,10 +199,7 @@ class MySubmission(Submission):
        prediction for the supplied row of data
     """
     def get_prediction(self):
-        prediction = 0.5 * (np.dot(self.signals[self.turn], self.coeffs) + np.dot(self.signals[self.turn, 0:3], self.coeffs_widrow_hoff))
-
-        if np.isfinite(self.sig7) and self.sig7 != 0.:
-            prediction += 0.2921203942315244 * self.sig7
+        prediction = self.model.predict(self.signals[self.turn:self.turn + 1, :])[0]
 
         if not np.isfinite(prediction):
             prediction = 0
