@@ -1,6 +1,6 @@
 import math, pickle, subprocess, time
 import numpy as np
-import pandas as pd
+from collections import deque
 from core import Submission
 
 """
@@ -53,6 +53,7 @@ class MySubmission(Submission):
     def __init__(self):
         self.turn = 0
         self.ARRAY_SIZE = 5000000
+        self.widrow_hoff_alpha = 0.0002
 
         self.alpha_12 = 0.15384615384 # 2 / (12 + 1)
         self.alpha_20 = 0.095238095 # 2 / (20 + 1)
@@ -61,14 +62,12 @@ class MySubmission(Submission):
         self.alpha_1500 = 0.00133244503 # 2 / (1500 + 1)
 
         # Huber, no weight, full period
-        self.coeffs = np.array([0.051729141649204995, 0.08709222681091586, 0.04380669075741997, -0.0009319557152674777, 0.03797981861642649, 0])
+        self.coeffs = np.array([0.05974501289436338, 0.06511968449237791, 0.025236577015224314, -0.0007101852996483487, 0.021282336779706503, 0.2422997940191871])
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
         self.y_pred = np.zeros(self.ARRAY_SIZE)
         self.signals = np.zeros((self.ARRAY_SIZE, len(self.coeffs)))
-
-        self.model = pickle.load(open('model.sav', 'rb'))
 
         super().__init__()
 
@@ -192,6 +191,9 @@ class MySubmission(Submission):
         signals[np.isnan(signals)] = 0
         self.signals[turn, :] = signals
 
+        #if turn > 87:
+        #    self.coeffs_widrow_hoff = self.coeffs_widrow_hoff - self.widrow_hoff_alpha * (self.y_pred[turn_prev] - self.y[turn_prev]) * self.signals[turn_prev]
+
         return
 
     """
@@ -199,7 +201,7 @@ class MySubmission(Submission):
        prediction for the supplied row of data
     """
     def get_prediction(self):
-        prediction = self.model.predict(self.signals[self.turn:self.turn + 1, :])[0]
+        prediction = np.dot(self.signals[self.turn], self.coeffs)
 
         if not np.isfinite(prediction):
             prediction = 0
