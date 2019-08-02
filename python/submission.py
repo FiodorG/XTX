@@ -61,7 +61,7 @@ class MySubmission(Submission):
         self.alpha_1500 = 0.00133244503 # 2 / (1500 + 1)
 
         # Huber, no weight, full period
-        self.coeffs = np.array([0.05974501289436338, 0.06511968449237791, 0.025236577015224314, -0.0007101852996483487, 0.021282336779706503, 0.2422997940191871])
+        self.coeffs = np.array([0.051064496028457446, 0.08452330225049089, 0.04444143809904641, -0.0009194304191495346, 0.03763369445409574, 0.23727362426157578])
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
