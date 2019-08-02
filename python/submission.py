@@ -62,7 +62,8 @@ class MySubmission(Submission):
         self.alpha_1500 = 0.00133244503 # 2 / (1500 + 1)
 
         # Huber, no weight, full period
-        self.coeffs = np.array([0.05974501289436338, 0.06511968449237791, 0.025236577015224314, -0.0007101852996483487, 0.021282336779706503, 0.2422997940191871])
+        self.coeffs = np.array([0.051729141649204995, 0.08709222681091586, 0.04380669075741997, -0.0009319557152674777, 0.03797981861642649])
+        self.coeffs_widrow_hoff = self.coeffs
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
@@ -186,7 +187,7 @@ class MySubmission(Submission):
         self.sig6 = (bidSizeTotal - self.bidSizeTotal_ewma20) / self.bidSizeTotal_vol_ewma20 - (askSizeTotal - self.askSizeTotal_ewma20) / self.askSizeTotal_vol_ewma20
         self.sig7 = (askRate1 - askRate0 - 0.5) - (bidRate0 - bidRate1 - 0.5)
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig7])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5])
         signals[np.isinf(signals)] = 0
         signals[np.isnan(signals)] = 0
         self.signals[turn, :] = signals
@@ -202,6 +203,9 @@ class MySubmission(Submission):
     """
     def get_prediction(self):
         prediction = np.dot(self.signals[self.turn], self.coeffs)
+
+        if np.isfinite(self.sig7) and self.sig7 != 0.:
+            prediction += 0.2921203942315244 * self.sig7
 
         if not np.isfinite(prediction):
             prediction = 0
