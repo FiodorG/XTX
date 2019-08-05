@@ -52,13 +52,20 @@ class MySubmission(Submission):
     def __init__(self):
         self.turn = 0
         self.ARRAY_SIZE = 5000000
-        self.widrow_hoff_alpha = 0.0002
 
-        self.alpha_12 = 0.15384615384 # 2 / (12 + 1)
-        self.alpha_20 = 0.095238095 # 2 / (20 + 1)
-        self.alpha_50 = 0.03921568627 # 2 / (50 + 1)
-        self.alpha_500 = 0.00399201596 # 2 / (500 + 1)
-        self.alpha_1500 = 0.00133244503 # 2 / (1500 + 1)
+        self.alpha_10 = 2. / (10. + 1.)
+        self.alpha_12 = 2. / (12. + 1.)
+        self.alpha_20 = 2. / (20. + 1.)
+        self.alpha_50 = 2. / (50. + 1.)
+        self.alpha_500 = 2. / (500. + 1.)
+        self.alpha_1500 = 2. / (1500. + 1.)
+
+        self.bias_10 = (2. - self.alpha_10) / 2. / (1. - self.alpha_10)
+        self.bias_12 = (2. - self.alpha_12) / 2. / (1. - self.alpha_12)
+        self.bias_20 = (2. - self.alpha_20) / 2. / (1. - self.alpha_20)
+        self.bias_50 = (2. - self.alpha_50) / 2. / (1. - self.alpha_50)
+        self.bias_500 = (2. - self.alpha_500) / 2. / (1. - self.alpha_500)
+        self.bias_1500 = (2. - self.alpha_1500) / 2. / (1. - self.alpha_1500)
 
         # Huber, no weight, full period
         self.coeffs = np.array([0.051064496028457446, 0.08452330225049089, 0.04444143809904641, -0.0009194304191495346, 0.03763369445409574, 0.23727362426157578])
@@ -111,11 +118,13 @@ class MySubmission(Submission):
         bidSizeTotal = np.sum(x[45:60])
 
         mid = 0.5 * (bidRate0 + askRate0)
+        mid_mic = (askSize0 * bidRate0 + bidSize0 * askRate0) / (askSize0 + bidSize0)
         y = mid - self.mids[turn_prev]
         self.mids[turn] = mid
         self.y[turn_prev] = y
 
         if self.turn == 0:
+            self.y_ewma500 = y
             self.y_var_ewma500 = 0.18
             self.y_vol_ewma500 = math.sqrt(self.y_var_ewma500)
 
@@ -142,39 +151,52 @@ class MySubmission(Submission):
             self.bidSizeTotal_var_ewma20 = 4.6359
             self.askSizeTotal_vol_ewma20 = math.sqrt(self.askSizeTotal_var_ewma20)
             self.bidSizeTotal_vol_ewma20 = math.sqrt(self.bidSizeTotal_var_ewma20)
+
+            self.midMic_ewma10 = mid_mic
+            self.midMic_var_ewma10 = 0.2568
+            self.midMic_vol_ewma10 = math.sqrt(self.midMic_var_ewma10)
+
         else:
-            # y vol
-            self.y_var_ewma500 = (1. - self.alpha_500) * (self.y_var_ewma500 + self.alpha_500 * y * y)
+            # y
+            self.y_var_ewma500 = (1. - self.alpha_500) * (self.y_var_ewma500 + self.bias_500 * self.alpha_500 * (y - self.y_ewma500) * (y - self.y_ewma500))
             self.y_vol_ewma500 = math.sqrt(self.y_var_ewma500)
 
-            # bidSize0 and askSize0 ewma
-            self.bidSize0_ewma50 = (1. - self.alpha_50) * self.bidSize0_ewma50 + self.alpha_50 * bidSize0
-            self.askSize0_ewma50 = (1. - self.alpha_50) * self.askSize0_ewma50 + self.alpha_50 * askSize0
+            self.y_ewma500 = (1. - self.alpha_500) * self.y_ewma500 + self.alpha_500 * y
 
-            self.bidSize0_var_ewma50 = (1. - self.alpha_50) * (self.bidSize0_var_ewma50 + self.alpha_50 * bidSize0 * bidSize0)
-            self.askSize0_var_ewma50 = (1. - self.alpha_50) * (self.askSize0_var_ewma50 + self.alpha_50 * askSize0 * askSize0)
+            # bidSize0 and askSize0 ewma
+            self.bidSize0_var_ewma50 = (1. - self.alpha_50) * (self.bidSize0_var_ewma50 + self.bias_50 * self.alpha_50 * (bidSize0 - self.bidSize0_ewma50) * (bidSize0 - self.bidSize0_ewma50))
+            self.askSize0_var_ewma50 = (1. - self.alpha_50) * (self.askSize0_var_ewma50 + self.bias_50 * self.alpha_50 * (askSize0 - self.askSize0_ewma50) * (askSize0 - self.askSize0_ewma50))
             self.bidSize0_vol_ewma50 = math.sqrt(self.bidSize0_var_ewma50)
             self.askSize0_vol_ewma50 = math.sqrt(self.askSize0_var_ewma50)
+
+            self.bidSize0_ewma50 = (1. - self.alpha_50) * self.bidSize0_ewma50 + self.alpha_50 * bidSize0
+            self.askSize0_ewma50 = (1. - self.alpha_50) * self.askSize0_ewma50 + self.alpha_50 * askSize0
 
             # bidSize1 and askSize1 ewma
             self.bidSize1_ewma50 = (1. - self.alpha_50) * self.bidSize1_ewma50 + self.alpha_50 * bidSize1
             self.askSize1_ewma50 = (1. - self.alpha_50) * self.askSize1_ewma50 + self.alpha_50 * askSize1
 
             # bidSizeTotal and askSizeTotal ewma
+            self.askSize01_var_ewma50 = (1. - self.alpha_50) * (self.askSize01_var_ewma50 + self.bias_50 * self.alpha_50 * (askSize01 - self.askSize01_ewma50) * (askSize01 - self.askSize01_ewma50))
+            self.bidSize01_var_ewma50 = (1. - self.alpha_50) * (self.bidSize01_var_ewma50 + self.bias_50 * self.alpha_50 * (bidSize01 - self.bidSize01_ewma50) * (bidSize01 - self.bidSize01_ewma50))
+            self.askSize01_vol_ewma50 = math.sqrt(self.askSize01_var_ewma50)
+            self.bidSize01_vol_ewma50 = math.sqrt(self.bidSize01_var_ewma50)
+            self.askSizeTotal_var_ewma20 = (1. - self.alpha_20) * (self.askSizeTotal_var_ewma20 + self.bias_20 * self.alpha_20 * (askSizeTotal - self.askSizeTotal_ewma20) * (askSizeTotal - self.askSizeTotal_ewma20))
+            self.bidSizeTotal_var_ewma20 = (1. - self.alpha_20) * (self.bidSizeTotal_var_ewma20 + self.bias_20 * self.alpha_20 * (bidSizeTotal - self.bidSizeTotal_ewma20) * (bidSizeTotal - self.bidSizeTotal_ewma20))
+            self.askSizeTotal_vol_ewma20 = math.sqrt(self.askSizeTotal_var_ewma20)
+            self.bidSizeTotal_vol_ewma20 = math.sqrt(self.bidSizeTotal_var_ewma20)
+
             self.askSize01_ewma50 = (1. - self.alpha_50) * self.askSize01_ewma50 + self.alpha_50 * askSize01
             self.bidSize01_ewma50 = (1. - self.alpha_50) * self.bidSize01_ewma50 + self.alpha_50 * bidSize01
             self.askSizeTotal_ewma20 = (1. - self.alpha_20) * self.askSizeTotal_ewma20 + self.alpha_20 * askSizeTotal
             self.bidSizeTotal_ewma20 = (1. - self.alpha_20) * self.bidSizeTotal_ewma20 + self.alpha_20 * bidSizeTotal
 
-            self.askSize01_var_ewma50 = (1. - self.alpha_50) * (self.askSize01_var_ewma50 + self.alpha_50 * askSize01 * askSize01)
-            self.bidSize01_var_ewma50 = (1. - self.alpha_50) * (self.bidSize01_var_ewma50 + self.alpha_50 * bidSize01 * bidSize01)
-            self.askSize01_vol_ewma50 = math.sqrt(self.askSize01_var_ewma50)
-            self.bidSize01_vol_ewma50 = math.sqrt(self.bidSize01_var_ewma50)
-            self.askSizeTotal_var_ewma20 = (1. - self.alpha_20) * (self.askSizeTotal_var_ewma20 + self.alpha_20 * askSizeTotal * askSizeTotal)
-            self.bidSizeTotal_var_ewma20 = (1. - self.alpha_20) * (self.bidSizeTotal_var_ewma20 + self.alpha_20 * bidSizeTotal * bidSizeTotal)
-            self.askSizeTotal_vol_ewma20 = math.sqrt(self.askSizeTotal_var_ewma20)
-            self.bidSizeTotal_vol_ewma20 = math.sqrt(self.bidSizeTotal_var_ewma20)
 
+            # Micro mid zscore
+            self.midMic_var_ewma10 = (1. - self.alpha_10) * (self.midMic_var_ewma10 + self.bias_10 * self.alpha_10 * (mid_mic - self.midMic_ewma10) * (mid_mic - self.midMic_ewma10))
+            self.midMic_vol_ewma10 = math.sqrt(self.midMic_var_ewma10)
+
+            self.midMic_ewma10 = (1. - self.alpha_10) * self.midMic_ewma10 + self.alpha_10 * mid_mic
 
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
@@ -184,11 +206,12 @@ class MySubmission(Submission):
         self.sig5 = (bidSize0 - self.bidSize0_ewma50) / self.bidSize0_vol_ewma50 - (askSize0 - self.askSize0_ewma50) / self.askSize0_vol_ewma50
         self.sig6 = (bidSizeTotal - self.bidSizeTotal_ewma20) / self.bidSizeTotal_vol_ewma20 - (askSizeTotal - self.askSizeTotal_ewma20) / self.askSizeTotal_vol_ewma20
         self.sig7 = (askRate1 - askRate0 - 0.5) - (bidRate0 - bidRate1 - 0.5)
+        self.sig8 = (mid_mic - self.midMic_ewma10) / self.midMic_vol_ewma10
 
         signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig7])
         signals[np.isinf(signals)] = 0
         signals[np.isnan(signals)] = 0
-        self.signals[turn, :] = signals
+        self.signals[turn, :] = signals	
 
         return
 
