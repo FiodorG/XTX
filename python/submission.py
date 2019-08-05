@@ -68,7 +68,7 @@ class MySubmission(Submission):
         self.bias_1500 = (2. - self.alpha_1500) / 2. / (1. - self.alpha_1500)
 
         # Huber, no weight, full period
-        self.coeffs = np.array([0.051064496028457446, 0.08452330225049089, 0.04444143809904641, -0.0009194304191495346, 0.03763369445409574, 0.23727362426157578])
+        self.coeffs = np.array([0.055979749719653575, 0.08889873100977495, 0.06828436827015598, -0.0007555475766485578, 0.027613118769863016, 0.2657995516113309, 0.046534358271761944])
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
@@ -208,7 +208,7 @@ class MySubmission(Submission):
         self.sig7 = (askRate1 - askRate0 - 0.5) - (bidRate0 - bidRate1 - 0.5)
         self.sig8 = (mid_mic - self.midMic_ewma10) / self.midMic_vol_ewma10
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig7])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig7, self.sig8])
         signals[np.isinf(signals)] = 0
         signals[np.isnan(signals)] = 0
         self.signals[turn, :] = signals	
