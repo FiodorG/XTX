@@ -68,7 +68,7 @@ class MySubmission(Submission):
         self.bias_1500 = (2. - self.alpha_1500) / 2. / (1. - self.alpha_1500)
 
         # Huber, no weight, full period
-        self.coeffs = np.array([0.06091514184015422, 0.06924124475766319, 0.024877470955222084, -0.0005817873609122077, 0.015001122130032754, 0.017062034000772133, 0.24180765420229836])
+        self.coeffs = np.array([0.06952568353882525, 0.053566087815601626, 0.02373664693102293, -0.0008464675137630243, 0.013692493721151945, 0.018328682723667788, 0.2208600364882358])
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
