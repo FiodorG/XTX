@@ -68,7 +68,7 @@ class MySubmission(Submission):
         self.bias_1500 = (2. - self.alpha_1500) / 2. / (1. - self.alpha_1500)
 
         # Huber, no weight, full period
-        self.coeffs = np.array([0.06187586809287128, 0.0669577429507664, 0.024411166446884874, -0.0005625232027596757, 0.013571512756172634, 0.018735275437639497, -0.4249496477675908])
+        self.coeffs = np.array([0.061083714051152184, 0.06796228359311546, 0.02496744096600849, -0.0005748200162722072, 0.014913269431158813, 0.01714610607670116, 0.2372554979650377, -0.3789048854518919])
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
@@ -104,8 +104,10 @@ class MySubmission(Submission):
 
         askRate0 = x[0] if x[0] != 0 else np.nan
         askRate1 = x[1] if x[1] != 0 else np.nan
+        askRate2 = x[2] if x[2] != 0 else np.nan
         bidRate0 = x[30] if x[30] != 0 else np.nan
         bidRate1 = x[31] if x[31] != 0 else np.nan
+        bidRate2 = x[32] if x[32] != 0 else np.nan
 
         askSize0 = x[15]
         askSize1 = x[16]
@@ -207,10 +209,11 @@ class MySubmission(Submission):
         self.sig4 = bidSize1 / bidSize0 - askSize1 / askSize0
         self.sig5 = (bidSize0 - self.bidSize0_ewma50) / self.bidSize0_vol_ewma50 - (askSize0 - self.askSize0_ewma50) / self.askSize0_vol_ewma50
         self.sig6 = (bidSizeTotal - self.bidSizeTotal_ewma20) / self.bidSizeTotal_vol_ewma20 - (askSizeTotal - self.askSizeTotal_ewma20) / self.askSizeTotal_vol_ewma20
-        self.sig7 = ((bidRate0 - bidRate1) - (askRate1 - askRate0)) / ((bidRate0 - bidRate1) + (askRate1 - askRate0))
-        self.sig8 = (mid_mic - self.midMic_ewma10) / self.midMic_vol_ewma10
+        self.sig7 = (askRate1 - askRate0) - (bidRate0 - bidRate1)
+        self.sig8 = ((bidRate1 - bidRate2) - (askRate2 - askRate1)) / ((bidRate1 - bidRate2) + (askRate2 - askRate1))
+        self.sig9 = (mid_mic - self.midMic_ewma10) / self.midMic_vol_ewma10
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals	
