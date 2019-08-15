@@ -68,7 +68,7 @@ class MySubmission(Submission):
         self.bias_1500 = (2. - self.alpha_1500) / 2. / (1. - self.alpha_1500)
 
         # Huber, no weight, full period
-        self.coeffs = np.array([0.061083714051152184, 0.06796228359311546, 0.02496744096600849, -0.0005748200162722072, 0.014913269431158813, 0.01714610607670116, 0.2372554979650377, -0.3789048854518919])
+        self.coeffs = np.array([0.06213336946109023, 0.06579829542135447, 0.024513224630765038, -0.0005572982918021544, 0.013479854390995576, 0.01888864958108105, 0.2383778663593188, -0.3835957921788901])
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
@@ -118,8 +118,8 @@ class MySubmission(Submission):
 
         askSize012 = askSize0 + askSize1 + askSize2
         bidSize012 = bidSize0 + bidSize1 + bidSize2
-        askSizeTotal = np.sum(x[15:30])
-        bidSizeTotal = np.sum(x[45:60])
+        askSizeTotal = np.sum(x[15:25])
+        bidSizeTotal = np.sum(x[45:55])
 
         mid = 0.5 * (bidRate0 + askRate0)
         mid_mic = (askSize0 * bidRate0 + bidSize0 * askRate0) / (askSize0 + bidSize0)
