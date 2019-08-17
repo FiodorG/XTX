@@ -1,5 +1,7 @@
 import math, pickle, subprocess, time
 import numpy as np
+import sklearn
+from sklearn.linear_model import HuberRegressor
 from core import Submission
 
 """
@@ -55,6 +57,7 @@ class MySubmission(Submission):
 
         self.alpha_10 = 2. / (10. + 1.)
         self.alpha_12 = 2. / (12. + 1.)
+        self.alpha_15 = 2. / (15. + 1.)
         self.alpha_20 = 2. / (20. + 1.)
         self.alpha_50 = 2. / (50. + 1.)
         self.alpha_500 = 2. / (500. + 1.)
@@ -62,13 +65,15 @@ class MySubmission(Submission):
 
         self.bias_10 = (2. - self.alpha_10) / 2. / (1. - self.alpha_10)
         self.bias_12 = (2. - self.alpha_12) / 2. / (1. - self.alpha_12)
+        self.bias_15 = (2. - self.alpha_15) / 2. / (1. - self.alpha_15)
         self.bias_20 = (2. - self.alpha_20) / 2. / (1. - self.alpha_20)
         self.bias_50 = (2. - self.alpha_50) / 2. / (1. - self.alpha_50)
         self.bias_500 = (2. - self.alpha_500) / 2. / (1. - self.alpha_500)
         self.bias_1500 = (2. - self.alpha_1500) / 2. / (1. - self.alpha_1500)
 
         # Huber, no weight, full period
-        self.coeffs = np.array([0.06873795883023463, 0.07572060114040316, 0.028872752840685096, -0.0003872471686461829, 0.0041759834081981535, 0.01718883530512115, 0.27167883988523095, -0.3822815334373305, 0.04150088014535495])
+        self.coeffs = np.array([0.06959032830871012, 0.07503433524724755, 0.02936214218161596, -0.0008022903033618125, 0.01688811769669491, 0.021200770101258704, 0.3279924270553035, -0.4138600991189335, 0.12490913624808835])
+        #self.running_model = HuberRegressor(fit_intercept=False, epsilon=1.35)
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
@@ -102,12 +107,12 @@ class MySubmission(Submission):
         turn = self.turn
         turn_prev = max(turn - 87, 0)
 
-        askRate0 = x[0] if x[0] != 0 else np.nan
-        askRate1 = x[1] if x[1] != 0 else np.nan
-        askRate2 = x[2] if x[2] != 0 else np.nan
-        bidRate0 = x[30] if x[30] != 0 else np.nan
-        bidRate1 = x[31] if x[31] != 0 else np.nan
-        bidRate2 = x[32] if x[32] != 0 else np.nan
+        askRate0 = x[0] if x[0] != 0. else np.nan
+        askRate1 = x[1] if x[1] != 0. else np.nan
+        askRate2 = x[2] if x[2] != 0. else np.nan
+        bidRate0 = x[30] if x[30] != 0. else np.nan
+        bidRate1 = x[31] if x[31] != 0. else np.nan
+        bidRate2 = x[32] if x[32] != 0. else np.nan
 
         askSize0 = x[15]
         askSize1 = x[16]
@@ -126,6 +131,8 @@ class MySubmission(Submission):
         y = mid - self.mids[turn_prev]
         self.mids[turn] = mid
         self.y[turn_prev] = y
+
+        #self.running_model.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
 
         if self.turn == 0:
             self.y_ewma500 = y
@@ -156,9 +163,12 @@ class MySubmission(Submission):
             self.askSizeTotal_vol_ewma20 = math.sqrt(self.askSizeTotal_var_ewma20)
             self.bidSizeTotal_vol_ewma20 = math.sqrt(self.bidSizeTotal_var_ewma20)
 
-            self.midMic_ewma20 = mid_mic
-            self.midMic_var_ewma20 = 0.0001
-            self.midMic_vol_ewma20 = math.sqrt(self.midMic_var_ewma20)
+            self.midMic_ewma10 = mid_mic
+            self.midMic_var_ewma10 = 0.0001
+            self.midMic_vol_ewma10 = math.sqrt(self.midMic_var_ewma10)
+
+            self.askRate0_ewma15 = askRate0
+            self.bidRate0_ewma15 = bidRate0
 
         else:
             # y
@@ -195,12 +205,15 @@ class MySubmission(Submission):
             self.askSizeTotal_ewma20 = (1. - self.alpha_20) * self.askSizeTotal_ewma20 + self.alpha_20 * askSizeTotal
             self.bidSizeTotal_ewma20 = (1. - self.alpha_20) * self.bidSizeTotal_ewma20 + self.alpha_20 * bidSizeTotal
 
-
             # Micro mid zscore
-            self.midMic_var_ewma20 = (1. - self.alpha_20) * (self.midMic_var_ewma20 + self.bias_20 * self.alpha_20 * (mid_mic - self.midMic_ewma20) * (mid_mic - self.midMic_ewma20))
-            self.midMic_vol_ewma20 = math.sqrt(self.midMic_var_ewma20)
+            self.midMic_var_ewma10 = (1. - self.alpha_10) * (self.midMic_var_ewma10 + self.bias_10 * self.alpha_10 * (mid_mic - self.midMic_ewma10) * (mid_mic - self.midMic_ewma10))
+            self.midMic_vol_ewma10 = math.sqrt(self.midMic_var_ewma10)
 
-            self.midMic_ewma20 = (1. - self.alpha_20) * self.midMic_ewma20 + self.alpha_20 * mid_mic
+            self.midMic_ewma10 = (1. - self.alpha_10) * self.midMic_ewma10 + self.alpha_10 * mid_mic
+
+            # AskRate and bidRate
+            self.askRate0_ewma15 = (1. - self.alpha_15) * self.askRate0_ewma15 + self.alpha_15 * askRate0
+            self.bidRate0_ewma15 = (1. - self.alpha_15) * self.bidRate0_ewma15 + self.alpha_15 * bidRate0
 
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
@@ -211,12 +224,14 @@ class MySubmission(Submission):
         self.sig6 = (bidSizeTotal - self.bidSizeTotal_ewma20) / self.bidSizeTotal_vol_ewma20 - (askSizeTotal - self.askSizeTotal_ewma20) / self.askSizeTotal_vol_ewma20
         self.sig7 = (askRate1 - askRate0) - (bidRate0 - bidRate1)
         self.sig8 = ((bidRate1 - bidRate2) - (askRate2 - askRate1)) / ((bidRate1 - bidRate2) + (askRate2 - askRate1))
-        self.sig9 = (mid_mic - self.midMic_ewma20) / self.midMic_vol_ewma20
+        self.sig9 = (mid_mic - self.midMic_ewma10) / self.midMic_vol_ewma10
+        self.sig10 = bidRate0 - self.bidRate0_ewma15 + askRate0 - self.bidRate0_ewma15
+        #################
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig9])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig10])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
-        self.signals[turn, :] = signals	
+        self.signals[turn, :] = signals
 
         return
 
