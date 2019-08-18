@@ -71,14 +71,13 @@ class MySubmission(Submission):
         self.bias_500 = (2. - self.alpha_500) / 2. / (1. - self.alpha_500)
         self.bias_1500 = (2. - self.alpha_1500) / 2. / (1. - self.alpha_1500)
 
-        # Huber, no weight, full period
-        self.coeffs = np.array([0.06959032830871012, 0.07503433524724755, 0.02936214218161596, -0.0008022903033618125, 0.01688811769669491, 0.021200770101258704, 0.3279924270553035, -0.4138600991189335, 0.12490913624808835])
-        #self.running_model = HuberRegressor(fit_intercept=False, epsilon=1.35)
+        self.static_model = pickle.load(open('model.sav', 'rb'))
+        self.running_model = HuberRegressor(fit_intercept=False, epsilon=1.35)
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
         self.y_pred = np.zeros(self.ARRAY_SIZE)
-        self.signals = np.zeros((self.ARRAY_SIZE, len(self.coeffs)))
+        self.signals = np.zeros((self.ARRAY_SIZE, len(self.static_model.coef_)))
 
         super().__init__()
 
@@ -132,7 +131,9 @@ class MySubmission(Submission):
         self.mids[turn] = mid
         self.y[turn_prev] = y
 
-        #self.running_model.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
+        #if (self.turn + 1 % 10000) == 0:
+        #if self.turn == 2:
+        #    self.running_model.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
 
         if self.turn == 0:
             self.y_ewma500 = y
@@ -225,10 +226,10 @@ class MySubmission(Submission):
         self.sig7 = (askRate1 - askRate0) - (bidRate0 - bidRate1)
         self.sig8 = ((bidRate1 - bidRate2) - (askRate2 - askRate1)) / ((bidRate1 - bidRate2) + (askRate2 - askRate1))
         self.sig9 = (mid_mic - self.midMic_ewma10) / self.midMic_vol_ewma10
-        self.sig10 = bidRate0 - self.bidRate0_ewma15 + askRate0 - self.bidRate0_ewma15
+        self.sig10 = bidRate0 - self.bidRate0_ewma15 + askRate0 - self.askRate0_ewma15
         #################
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig10])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
@@ -236,11 +237,13 @@ class MySubmission(Submission):
         return
 
     """
-    get_prediction(data) expects a row of data from data.csv as input and should return a float that represents a
-       prediction for the supplied row of data
+    get_prediction(data) expects a row of data from data.csv as input and should return a float that represents a prediction for the supplied row of data
     """
     def get_prediction(self):
-        prediction = np.dot(self.signals[self.turn], self.coeffs)
+
+        static_prediction = self.static_model.predict(self.signals[self.turn:self.turn + 1, :])[0]
+        #running_prediction = self.running_model.predict(self.signals[self.turn:self.turn + 1, :])[0]
+        prediction = static_prediction
 
         if not np.isfinite(prediction):
             prediction = 0.
@@ -251,9 +254,7 @@ class MySubmission(Submission):
 
 
     """
-    run_submission() will iteratively fetch the next row of data in the format 
-       specified (get_next_data_as_string, get_next_data_as_list, get_next_data_as_numpy_array)
-       for every prediction submitted to self.submit_prediction()
+    run_submission() will iteratively fetch the next row of data in the format specified for every prediction submitted to self.submit_prediction()
     """
     def run_submission(self):
 
