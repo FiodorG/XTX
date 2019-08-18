@@ -54,6 +54,7 @@ class MySubmission(Submission):
     def __init__(self):
         self.turn = 0
         self.ARRAY_SIZE = 5000000
+        self.running_model_first_fit_turn = 100000
 
         self.alpha_10 = 2. / (10. + 1.)
         self.alpha_12 = 2. / (12. + 1.)
@@ -131,9 +132,8 @@ class MySubmission(Submission):
         self.mids[turn] = mid
         self.y[turn_prev] = y
 
-        #if (self.turn + 1 % 10000) == 0:
-        #if self.turn == 2:
-        #    self.running_model.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
+        if ((self.turn + 1) % self.running_model_first_fit_turn) == 0:
+            self.running_model.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
 
         if self.turn == 0:
             self.y_ewma500 = y
@@ -242,8 +242,12 @@ class MySubmission(Submission):
     def get_prediction(self):
 
         static_prediction = self.static_model.predict(self.signals[self.turn:self.turn + 1, :])[0]
-        #running_prediction = self.running_model.predict(self.signals[self.turn:self.turn + 1, :])[0]
-        prediction = static_prediction
+
+        if self.turn >= self.running_model_first_fit_turn:
+            running_prediction = self.running_model.predict(self.signals[self.turn:self.turn + 1, :])[0]
+            prediction = 0.5 * (static_prediction + running_prediction)
+        else:
+            prediction = static_prediction
 
         if not np.isfinite(prediction):
             prediction = 0.
