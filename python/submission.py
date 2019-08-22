@@ -76,6 +76,8 @@ class MySubmission(Submission):
         self.running_model = HuberRegressor(fit_intercept=False, epsilon=1.35)
         self.running_model2 = HuberRegressor(fit_intercept=False, epsilon=1.35)
 
+        self.askRatesPrev = None
+
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
         self.y_pred = np.zeros(self.ARRAY_SIZE)
@@ -126,6 +128,11 @@ class MySubmission(Submission):
         bidSize012 = bidSize0 + bidSize1 + bidSize2
         askSizeTotal = np.sum(x[15:25])
         bidSizeTotal = np.sum(x[45:55])
+        askDepth = np.sum(x[0:15] != 0.)
+        if self.askRatesPrev is None:
+            self.askRatesPrev = askDepth
+        is_reset = askDepth - self.askRatesPrev < -3.
+        self.askRatesPrev = askDepth
 
         mid = 0.5 * (bidRate0 + askRate0)
         mid_mic = (askSize0 * bidRate0 + bidSize0 * askRate0) / (askSize0 + bidSize0)
@@ -135,15 +142,15 @@ class MySubmission(Submission):
 
         if ((self.turn + 1) % self.running_model_first_fit_turn) == 0:
             self.running_model.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
-            self.running_model2.fit(self.signals[(turn_prev - self.running_model_first_fit_turn + 1):turn_prev], self.y[(turn_prev - self.running_model_first_fit_turn + 1):turn_prev])
+            self.running_model2.fit(self.signals[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev], self.y[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev])
 
-        if self.turn == 0:
+        if (self.turn == 0) or is_reset:
             self.y_ewma500 = y
-            self.y_var_ewma500 = 0.18
+            self.y_var_ewma500 = 0.0001
             self.y_vol_ewma500 = math.sqrt(self.y_var_ewma500)
 
-            self.bidSize0_var_ewma50 = 2.
-            self.askSize0_var_ewma50 = 5.
+            self.bidSize0_var_ewma50 = 0.0001
+            self.askSize0_var_ewma50 = 0.0001
             self.bidSize0_vol_ewma50 = math.sqrt(self.bidSize0_var_ewma50)
             self.askSize0_vol_ewma50 = math.sqrt(self.askSize0_var_ewma50)
 
@@ -157,12 +164,12 @@ class MySubmission(Submission):
             self.askSizeTotal_ewma20 = askSizeTotal
             self.bidSizeTotal_ewma20 = bidSizeTotal
 
-            self.askSize012_var_ewma50 = 17.8295
-            self.bidSize012_var_ewma50 = 25.4785
+            self.askSize012_var_ewma50 = 0.0001
+            self.bidSize012_var_ewma50 = 0.0001
             self.askSize012_vol_ewma50 = math.sqrt(self.askSize012_var_ewma50)
             self.bidSize012_vol_ewma50 = math.sqrt(self.bidSize012_var_ewma50)
-            self.askSizeTotal_var_ewma20 = 0.5155
-            self.bidSizeTotal_var_ewma20 = 4.6359
+            self.askSizeTotal_var_ewma20 = 0.0001
+            self.bidSizeTotal_var_ewma20 = 0.0001
             self.askSizeTotal_vol_ewma20 = math.sqrt(self.askSizeTotal_var_ewma20)
             self.bidSizeTotal_vol_ewma20 = math.sqrt(self.bidSizeTotal_var_ewma20)
 
