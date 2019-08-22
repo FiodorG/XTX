@@ -74,6 +74,7 @@ class MySubmission(Submission):
 
         self.static_model = pickle.load(open('model.sav', 'rb'))
         self.running_model = HuberRegressor(fit_intercept=False, epsilon=1.35)
+        self.running_model2 = HuberRegressor(fit_intercept=False, epsilon=1.35)
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
@@ -134,6 +135,7 @@ class MySubmission(Submission):
 
         if ((self.turn + 1) % self.running_model_first_fit_turn) == 0:
             self.running_model.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
+            self.running_model2.fit(self.signals[(turn_prev - self.running_model_first_fit_turn + 1):turn_prev], self.y[(turn_prev - self.running_model_first_fit_turn + 1):turn_prev])
 
         if self.turn == 0:
             self.y_ewma500 = y
@@ -245,7 +247,8 @@ class MySubmission(Submission):
 
         if self.turn >= self.running_model_first_fit_turn:
             running_prediction = self.running_model.predict(self.signals[self.turn:self.turn + 1, :])[0]
-            prediction = 0.5 * (static_prediction + running_prediction)
+            running_prediction2 = self.running_model2.predict(self.signals[self.turn:self.turn + 1, :])[0]
+            prediction = 0.3333 * (static_prediction + running_prediction + running_prediction2)
         else:
             prediction = static_prediction
 
