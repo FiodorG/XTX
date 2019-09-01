@@ -48,7 +48,6 @@ Implement the model below
 """
 
 
-# class MySubmission is the class that you will need to implement
 class MySubmission(Submission):
 
     def __init__(self):
@@ -72,18 +71,17 @@ class MySubmission(Submission):
         self.bias_500 = (2. - self.alpha_500) / 2. / (1. - self.alpha_500)
         self.bias_1500 = (2. - self.alpha_1500) / 2. / (1. - self.alpha_1500)
 
-        self.static_model = pickle.load(open('model.sav', 'rb'))
-        self.running_model = HuberRegressor(fit_intercept=False, epsilon=1.35)
-        self.running_model2 = HuberRegressor(fit_intercept=False, epsilon=1.35)
-
-        self.askRatesPrev = None
+        self.model_static = pickle.load(open('model.sav', 'rb'))
+        self.model_running = HuberRegressor(fit_intercept=False, epsilon=1.35)
+        self.model_expanding = HuberRegressor(fit_intercept=False, epsilon=1.35)
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
         self.y_pred = np.zeros(self.ARRAY_SIZE)
-        self.signals = np.zeros((self.ARRAY_SIZE, len(self.static_model.coef_)))
+        self.signals = np.zeros((self.ARRAY_SIZE, len(self.model_static.coef_)))
 
         super().__init__()
+
 
     """
     update_data(data) appends new row to existing dataframe
@@ -100,6 +98,24 @@ class MySubmission(Submission):
             self.y_pred.resize(2 * len(self.y_pred))
             self.signals.resize(2 * len(self.signals))
             self.ARRAY_SIZE = 2 * self.ARRAY_SIZE
+
+
+    """
+    is_new_day(self) tries to guess when it's a new session and rolling averages should be restarted.
+    The best I could find for now is that ask depth seems to be thin at start of sessions.
+    """
+    def is_new_day(self):
+
+        ask_depth = np.sum(self.x[0:15] != 0.)
+
+        if not hasattr(self, 'ask_depth_prev'):
+            self.ask_depth_prev = ask_depth
+
+        is_reset = ask_depth - self.ask_depth_prev < -3.
+        self.ask_depth_prev = ask_depth
+
+        return is_reset
+
 
     """
     update_features(self) update features after each new line is added
@@ -128,11 +144,6 @@ class MySubmission(Submission):
         bidSize012 = bidSize0 + bidSize1 + bidSize2
         askSizeTotal = np.sum(x[15:25])
         bidSizeTotal = np.sum(x[45:55])
-        askDepth = np.sum(x[0:15] != 0.)
-        if self.askRatesPrev is None:
-            self.askRatesPrev = askDepth
-        is_reset = askDepth - self.askRatesPrev < -3.
-        self.askRatesPrev = askDepth
 
         mid = 0.5 * (bidRate0 + askRate0)
         mid_mic = (askSize0 * bidRate0 + bidSize0 * askRate0) / (askSize0 + bidSize0)
@@ -141,10 +152,10 @@ class MySubmission(Submission):
         self.y[turn_prev] = y
 
         if ((self.turn + 1) % self.running_model_first_fit_turn) == 0:
-            self.running_model.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
-            self.running_model2.fit(self.signals[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev], self.y[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev])
+            self.model_expanding.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
+            self.model_running.fit(self.signals[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev], self.y[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev])
 
-        if (self.turn == 0) or is_reset:
+        if (self.turn == 0) or self.is_new_day():
             self.y_ewma500 = y
             self.y_var_ewma500 = 0.0001
             self.y_vol_ewma500 = math.sqrt(self.y_var_ewma500)
@@ -250,14 +261,15 @@ class MySubmission(Submission):
     """
     def get_prediction(self):
 
-        static_prediction = self.static_model.predict(self.signals[self.turn:self.turn + 1, :])[0]
+        signals = self.signals[self.turn:self.turn + 1, :]
+        prediction_static = self.model_static.predict(signals)[0]
 
         if self.turn >= self.running_model_first_fit_turn:
-            running_prediction = self.running_model.predict(self.signals[self.turn:self.turn + 1, :])[0]
-            running_prediction2 = self.running_model2.predict(self.signals[self.turn:self.turn + 1, :])[0]
-            prediction = 0.3333 * (static_prediction + running_prediction + running_prediction2)
+            prediction_expanding = self.model_expanding.predict(signals)[0]
+            prediction_running = self.model_running.predict(signals)[0]
+            prediction = 0.3333 * (prediction_static + prediction_expanding + prediction_running)
         else:
-            prediction = static_prediction
+            prediction = prediction_static
 
         if not np.isfinite(prediction):
             prediction = 0.
