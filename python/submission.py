@@ -149,7 +149,7 @@ class MySubmission(Submission):
         mid_mic = (askSize0 * bidRate0 + bidSize0 * askRate0) / (askSize0 + bidSize0)
         y = mid - self.mids[turn_prev]
         self.mids[turn] = mid
-        self.y[turn_prev] = y
+        self.y[turn_prev] = np.clip(y, -1.5, 1.5)
 
         if ((self.turn + 1) % self.running_model_first_fit_turn) == 0:
             self.model_expanding.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
