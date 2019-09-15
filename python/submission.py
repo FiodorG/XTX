@@ -74,6 +74,7 @@ class MySubmission(Submission):
         self.model_static = pickle.load(open('model.sav', 'rb'))
         self.model_running = HuberRegressor(fit_intercept=False, epsilon=1.35)
         self.model_expanding = HuberRegressor(fit_intercept=False, epsilon=1.35)
+        self.model_bagging = pickle.load(open('model_bagging.sav', 'rb'))
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
@@ -263,13 +264,14 @@ class MySubmission(Submission):
 
         signals = self.signals[self.turn:self.turn + 1, :]
         prediction_static = self.model_static.predict(signals)[0]
+        prediction_bagging = self.model_bagging.predict(signals)[0]
 
         if self.turn >= self.running_model_first_fit_turn:
             prediction_expanding = self.model_expanding.predict(signals)[0]
             prediction_running = self.model_running.predict(signals)[0]
-            prediction = 0.3333 * (prediction_static + prediction_expanding + prediction_running)
+            prediction = 0.25 * (prediction_static + prediction_expanding + prediction_running + prediction_bagging)
         else:
-            prediction = prediction_static
+            prediction = 0.5 * (prediction_static + prediction_bagging)
 
         if not np.isfinite(prediction):
             prediction = 0.
