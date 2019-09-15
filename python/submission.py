@@ -149,6 +149,7 @@ class MySubmission(Submission):
         mid_mic = (askSize0 * bidRate0 + bidSize0 * askRate0) / (askSize0 + bidSize0)
         y = mid - self.mids[turn_prev]
         self.mids[turn] = mid
+        self.y[turn_prev] = y
 
         if ((self.turn + 1) % self.running_model_first_fit_turn) == 0:
             self.model_expanding.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
@@ -187,13 +188,8 @@ class MySubmission(Submission):
             self.midMic_var_ewma10 = 0.0001
             self.midMic_vol_ewma10 = math.sqrt(self.midMic_var_ewma10)
 
-            self.askRate0_ewma20 = askRate0
-            self.bidRate0_ewma20 = bidRate0
-
-            self.askRate0_var_ewma20 = 0.0001
-            self.bidRate0_var_ewma20 = 0.0001
-            self.askRate0_vol_ewma20 = math.sqrt(self.askRate0_var_ewma20)
-            self.bidRate0_vol_ewma20 = math.sqrt(self.bidRate0_var_ewma20)
+            self.askRate0_ewma15 = askRate0
+            self.bidRate0_ewma15 = bidRate0
 
         else:
             # y
@@ -237,12 +233,8 @@ class MySubmission(Submission):
             self.midMic_ewma10 = (1. - self.alpha_10) * self.midMic_ewma10 + self.alpha_10 * mid_mic
 
             # AskRate and bidRate
-            self.askRate0_var_ewma20 = (1. - self.alpha_20) * (self.askRate0_var_ewma20 + self.bias_20 * self.alpha_20 * (askRate0 - self.askRate0_ewma20) * (askRate0 - self.askRate0_ewma20))
-            self.bidRate0_var_ewma20 = (1. - self.alpha_20) * (self.bidRate0_var_ewma20 + self.bias_20 * self.alpha_20 * (bidRate0 - self.bidRate0_ewma20) * (bidRate0 - self.bidRate0_ewma20))
-            self.askRate0_vol_ewma20 = math.sqrt(self.askRate0_var_ewma20)
-            self.bidRate0_vol_ewma20 = math.sqrt(self.bidRate0_var_ewma20)
-            self.askRate0_ewma20 = (1. - self.alpha_20) * self.askRate0_ewma20 + self.alpha_20 * askRate0
-            self.bidRate0_ewma20 = (1. - self.alpha_20) * self.bidRate0_ewma20 + self.alpha_20 * bidRate0
+            self.askRate0_ewma15 = (1. - self.alpha_15) * self.askRate0_ewma15 + self.alpha_15 * askRate0
+            self.bidRate0_ewma15 = (1. - self.alpha_15) * self.bidRate0_ewma15 + self.alpha_15 * bidRate0
 
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
@@ -254,10 +246,10 @@ class MySubmission(Submission):
         self.sig7 = (askRate1 - askRate0) - (bidRate0 - bidRate1)
         self.sig8 = ((bidRate1 - bidRate2) - (askRate2 - askRate1)) / ((bidRate1 - bidRate2) + (askRate2 - askRate1))
         self.sig9 = (mid_mic - self.midMic_ewma10) / self.midMic_vol_ewma10
-        self.sig10 = (bidRate0 - self.bidRate0_ewma20) / self.bidRate0_vol_ewma20 + (askRate0 - self.askRate0_ewma20) / self.askRate0_vol_ewma20
+        self.sig10 = bidRate0 - self.bidRate0_ewma15 + askRate0 - self.askRate0_ewma15
         #################
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig10])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
