@@ -4,49 +4,6 @@ import sklearn
 from sklearn.linear_model import HuberRegressor
 from core import Submission
 
-"""
-PYTHON submission
-
-Implement the model below
-
-##################################################### OVERVIEW ######################################################
-
-1. Use get_next_data_as_string() OR get_next_data_as_list() OR get_next_data_as_numpy_array() to recieve the next row of data
-2. Use the predict method to write the prediction logic, and return a float representing your prediction
-3. Submit a prediction using self.submit_prediction(...)
-
-################################################# OVERVIEW OF DATA ##################################################
-
-1. get_next_data_as_string() accepts no input and returns a String representing a row of data extracted from data.csv
-     Example output: '1619.5,1620.0,1621.0,,,,,,,,,,,,,1.0,10.0,24.0,,,,,,,,,,,,,1615.0,1614.0,1613.0,1612.0,1611.0,
-     1610.0,1607.0,1606.0,1605.0,1604.0,1603.0,1602.0,1601.5,1601.0,1600.0,7.0,10.0,1.0,10.0,20.0,3.0,20.0,27.0,11.0,
-     14.0,35.0,10.0,1.0,10.0,13.0'
-
-2. get_next_data_as_list() accepts no input and returns a List representing a row of data extracted from data.csv,
-   missing data is represented as NaN (math.nan)
-     Example output: [1619.5, 1620.0, 1621.0, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, 1.0, 10.0,
-     24.0, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, 1615.0, 1614.0, 1613.0, 1612.0, 1611.0, 1610.0,
-     1607.0, 1606.0, 1605.0, 1604.0, 1603.0, 1602.0, 1601.5, 1601.0, 1600.0, 7.0, 10.0, 1.0, 10.0, 20.0, 3.0, 20.0,
-     27.0, 11.0, 14.0, 35.0, 10.0, 1.0, 10.0, 13.0]
-
-3. get_next_data_as_numpy_array() accepts no input and returns a Numpy Array representing a row of data extracted from
-   data.csv, missing data is represented as NaN (math.nan)
-   Example output: [1.6195e+03 1.6200e+03 1.6210e+03 nan nan nan nan nan nan nan nan nan nan nan nan 1.0000e+00
-    1.0000e+01 2.4000e+01 nan nan nan nan nan nan nan nan nan nan nan nan 1.6150e+03 1.6140e+03 1.6130e+03 1.6120e+03
-     1.6110e+03 1.6100e+03 1.6070e+03 1.6060e+03 1.6050e+03 1.6040e+03 1.6030e+03 1.6020e+03 1.6015e+03 1.6010e+03
-      1.6000e+03 7.0000e+00 1.0000e+01 1.0000e+00 1.0000e+01 2.0000e+01 3.0000e+00 2.0000e+01 2.7000e+01 1.1000e+01
-       1.4000e+01 3.5000e+01 1.0000e+01 1.0000e+00 1.0000e+01 1.3000e+01]
-
-##################################################### IMPORTANT ######################################################
-
-1. One of the methods get_next_data_as_string(), get_next_data_as_list(), or get_next_data_as_numpy_array() MUST be used and
-   _prediction(pred) MUST be used to submit below in the solution implementation for the submission to work correctly.
-2. get_next_data_as_string(), get_next_data_as_list(), or get_next_data_as_numpy_array() CANNOT be called more then once in a
-   row without calling self.submit_prediction(pred).
-3. In order to debug by printing do NOT call the default method `print(...)`, rather call self.debug_print(...)
-
-"""
-
 
 class MySubmission(Submission):
 
@@ -118,6 +75,29 @@ class MySubmission(Submission):
 
 
     """
+    Compute zscore of input with given window
+    """
+    def z_score(self, x, name, n, reset):
+
+        var_name = name + '_var_ewm'
+        vol_name = name + '_vol_ewm'
+        ewma_name = name + '_ewma'
+
+        if reset:
+            setattr(self, var_name, 0.0001)
+            setattr(self, vol_name, math.sqrt(getattr(self, var_name)))
+            setattr(self, ewma_name, x)
+        else:
+            alpha = 2. / (n + 1.)
+            bias = (2. - alpha) / 2. / (1. - alpha)
+            setattr(self, var_name, (1. - alpha) * (getattr(self, var_name) + bias * alpha * (x - getattr(self, ewma_name))**2))
+            setattr(self, vol_name, math.sqrt(getattr(self, var_name)))
+            setattr(self, ewma_name, (1. - alpha) * getattr(self, ewma_name) + alpha * x)
+
+        setattr(self, name + '_zscore', (x - getattr(self, ewma_name)) / getattr(self, vol_name))
+
+
+    """
     update_features(self) update features after each new line is added
     """
     def update_features(self):
@@ -145,11 +125,11 @@ class MySubmission(Submission):
         askSizeTotal = np.sum(x[15:25])
         bidSizeTotal = np.sum(x[45:55])
         try:
-            distToBigTradeBid = [(e >= 20) for e in x[45:60]].index(True) + 1
+            distToBigTradeBid = [(e >= 20) for e in x[45:60]].index(True) + 1.
         except:
             distToBigTradeBid = None
         try:
-            distToBigTradeAsk = [(e >= 20) for e in x[15:30]].index(True) + 1
+            distToBigTradeAsk = [(e >= 20) for e in x[15:30]].index(True) + 1.
         except:
             distToBigTradeAsk = None
 
@@ -164,9 +144,6 @@ class MySubmission(Submission):
             self.model_running.fit(self.signals[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev], self.y[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev])
 
         if (self.turn == 0) or self.is_new_day():
-            self.y_ewma500 = y
-            self.y_var_ewma500 = 0.0001
-            self.y_vol_ewma500 = math.sqrt(self.y_var_ewma500)
 
             self.bidSize0_var_ewma50 = 0.0001
             self.askSize0_var_ewma50 = 0.0001
@@ -207,15 +184,10 @@ class MySubmission(Submission):
             self.distToBigTradeAsk_vol_ewma10 = np.sqrt(self.distToBigTradeAsk_var_ewma10)
 
         else:
-            # y
-            self.y_var_ewma500 = (1. - self.alpha_500) * (self.y_var_ewma500 + self.bias_500 * self.alpha_500 * (y - self.y_ewma500) * (y - self.y_ewma500))
-            self.y_vol_ewma500 = math.sqrt(self.y_var_ewma500)
-
-            self.y_ewma500 = (1. - self.alpha_500) * self.y_ewma500 + self.alpha_500 * y
 
             # bidSize0 and askSize0 ewma
-            self.bidSize0_var_ewma50 = (1. - self.alpha_50) * (self.bidSize0_var_ewma50 + self.bias_50 * self.alpha_50 * (bidSize0 - self.bidSize0_ewma50) * (bidSize0 - self.bidSize0_ewma50))
-            self.askSize0_var_ewma50 = (1. - self.alpha_50) * (self.askSize0_var_ewma50 + self.bias_50 * self.alpha_50 * (askSize0 - self.askSize0_ewma50) * (askSize0 - self.askSize0_ewma50))
+            self.bidSize0_var_ewma50 = (1. - self.alpha_50) * (self.bidSize0_var_ewma50 + self.bias_50 * self.alpha_50 * (bidSize0 - self.bidSize0_ewma50)**2)
+            self.askSize0_var_ewma50 = (1. - self.alpha_50) * (self.askSize0_var_ewma50 + self.bias_50 * self.alpha_50 * (askSize0 - self.askSize0_ewma50)**2)
             self.bidSize0_vol_ewma50 = math.sqrt(self.bidSize0_var_ewma50)
             self.askSize0_vol_ewma50 = math.sqrt(self.askSize0_var_ewma50)
 
@@ -227,12 +199,12 @@ class MySubmission(Submission):
             self.askSize1_ewma50 = (1. - self.alpha_50) * self.askSize1_ewma50 + self.alpha_50 * askSize1
 
             # bidSizeTotal and askSizeTotal ewma
-            self.askSize012_var_ewma50 = (1. - self.alpha_50) * (self.askSize012_var_ewma50 + self.bias_50 * self.alpha_50 * (askSize012 - self.askSize012_ewma50) * (askSize012 - self.askSize012_ewma50))
-            self.bidSize012_var_ewma50 = (1. - self.alpha_50) * (self.bidSize012_var_ewma50 + self.bias_50 * self.alpha_50 * (bidSize012 - self.bidSize012_ewma50) * (bidSize012 - self.bidSize012_ewma50))
+            self.askSize012_var_ewma50 = (1. - self.alpha_50) * (self.askSize012_var_ewma50 + self.bias_50 * self.alpha_50 * (askSize012 - self.askSize012_ewma50)**2)
+            self.bidSize012_var_ewma50 = (1. - self.alpha_50) * (self.bidSize012_var_ewma50 + self.bias_50 * self.alpha_50 * (bidSize012 - self.bidSize012_ewma50)**2)
             self.askSize012_vol_ewma50 = math.sqrt(self.askSize012_var_ewma50)
             self.bidSize012_vol_ewma50 = math.sqrt(self.bidSize012_var_ewma50)
-            self.askSizeTotal_var_ewma20 = (1. - self.alpha_20) * (self.askSizeTotal_var_ewma20 + self.bias_20 * self.alpha_20 * (askSizeTotal - self.askSizeTotal_ewma20) * (askSizeTotal - self.askSizeTotal_ewma20))
-            self.bidSizeTotal_var_ewma20 = (1. - self.alpha_20) * (self.bidSizeTotal_var_ewma20 + self.bias_20 * self.alpha_20 * (bidSizeTotal - self.bidSizeTotal_ewma20) * (bidSizeTotal - self.bidSizeTotal_ewma20))
+            self.askSizeTotal_var_ewma20 = (1. - self.alpha_20) * (self.askSizeTotal_var_ewma20 + self.bias_20 * self.alpha_20 * (askSizeTotal - self.askSizeTotal_ewma20)**2)
+            self.bidSizeTotal_var_ewma20 = (1. - self.alpha_20) * (self.bidSizeTotal_var_ewma20 + self.bias_20 * self.alpha_20 * (bidSizeTotal - self.bidSizeTotal_ewma20)**2)
             self.askSizeTotal_vol_ewma20 = math.sqrt(self.askSizeTotal_var_ewma20)
             self.bidSizeTotal_vol_ewma20 = math.sqrt(self.bidSizeTotal_var_ewma20)
 
@@ -242,7 +214,7 @@ class MySubmission(Submission):
             self.bidSizeTotal_ewma20 = (1. - self.alpha_20) * self.bidSizeTotal_ewma20 + self.alpha_20 * bidSizeTotal
 
             # Micro mid zscore
-            self.midMic_var_ewma10 = (1. - self.alpha_10) * (self.midMic_var_ewma10 + self.bias_10 * self.alpha_10 * (mid_mic - self.midMic_ewma10) * (mid_mic - self.midMic_ewma10))
+            self.midMic_var_ewma10 = (1. - self.alpha_10) * (self.midMic_var_ewma10 + self.bias_10 * self.alpha_10 * (mid_mic - self.midMic_ewma10)**2)
             self.midMic_vol_ewma10 = math.sqrt(self.midMic_var_ewma10)
 
             self.midMic_ewma10 = (1. - self.alpha_10) * self.midMic_ewma10 + self.alpha_10 * mid_mic
@@ -253,12 +225,12 @@ class MySubmission(Submission):
 
             # Distance to big trades
             if distToBigTradeBid:
-                self.distToBigTradeBid_var_ewma10 = (1. - self.alpha_10) * (self.distToBigTradeBid_var_ewma10 + self.bias_10 * self.alpha_10 * (distToBigTradeBid - self.distToBigTradeBid_ewma10) * (distToBigTradeBid - self.distToBigTradeBid_ewma10))
+                self.distToBigTradeBid_var_ewma10 = (1. - self.alpha_10) * (self.distToBigTradeBid_var_ewma10 + self.bias_10 * self.alpha_10 * (distToBigTradeBid - self.distToBigTradeBid_ewma10)**2)
                 self.distToBigTradeBid_vol_ewma10 = np.sqrt(self.distToBigTradeBid_var_ewma10)
                 self.distToBigTradeBid_ewma10 = (1. - self.alpha_10) * self.distToBigTradeBid_ewma10 + self.alpha_10 * distToBigTradeBid
             if distToBigTradeAsk:
+                self.distToBigTradeAsk_var_ewma10 = (1. - self.alpha_10) * (self.distToBigTradeAsk_var_ewma10 + self.bias_10 * self.alpha_10 * (distToBigTradeAsk - self.distToBigTradeAsk_ewma10)**2)
                 self.distToBigTradeAsk_vol_ewma10 = np.sqrt(self.distToBigTradeAsk_var_ewma10)
-                self.distToBigTradeAsk_var_ewma10 = (1. - self.alpha_10) * (self.distToBigTradeAsk_var_ewma10 + self.bias_10 * self.alpha_10 * (distToBigTradeAsk - self.distToBigTradeAsk_ewma10) * (distToBigTradeAsk - self.distToBigTradeAsk_ewma10))
                 self.distToBigTradeAsk_ewma10 = (1. - self.alpha_10) * self.distToBigTradeAsk_ewma10 + self.alpha_10 * distToBigTradeAsk
 
         #### Signals ####
