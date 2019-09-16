@@ -74,7 +74,6 @@ class MySubmission(Submission):
         self.model_static = pickle.load(open('model.sav', 'rb'))
         self.model_running = HuberRegressor(fit_intercept=False, epsilon=1.35)
         self.model_expanding = HuberRegressor(fit_intercept=False, epsilon=1.35)
-        self.model_bagging = pickle.load(open('model_bagging.sav', 'rb'))
 
         self.mids = np.zeros(self.ARRAY_SIZE)
         self.y = np.zeros(self.ARRAY_SIZE)
@@ -145,6 +144,8 @@ class MySubmission(Submission):
         bidSize012 = bidSize0 + bidSize1 + bidSize2
         askSizeTotal = np.sum(x[15:25])
         bidSizeTotal = np.sum(x[45:55])
+        distToBigTradeBid = [(x >= 20) for x in x[45:60]].index(True) + 1
+        distToBigTradeAsk = [(x >= 20) for x in x[15:30]].index(True) + 1
 
         mid = 0.5 * (bidRate0 + askRate0)
         mid_mic = (askSize0 * bidRate0 + bidSize0 * askRate0) / (askSize0 + bidSize0)
@@ -192,6 +193,13 @@ class MySubmission(Submission):
             self.askRate0_ewma15 = askRate0
             self.bidRate0_ewma15 = bidRate0
 
+            self.distToBigTradeBid_ewma10 = distToBigTradeBid
+            self.distToBigTradeAsk_ewma10 = distToBigTradeAsk
+            self.distToBigTradeBid_var_ewma10 = 0.0001
+            self.distToBigTradeAsk_var_ewma10 = 0.0001
+            self.distToBigTradeBid_vol_ewma10 = np.sqrt(self.distToBigTradeBid_var_ewma10)
+            self.distToBigTradeAsk_vol_ewma10 = np.sqrt(self.distToBigTradeAsk_var_ewma10)
+
         else:
             # y
             self.y_var_ewma500 = (1. - self.alpha_500) * (self.y_var_ewma500 + self.bias_500 * self.alpha_500 * (y - self.y_ewma500) * (y - self.y_ewma500))
@@ -237,6 +245,14 @@ class MySubmission(Submission):
             self.askRate0_ewma15 = (1. - self.alpha_15) * self.askRate0_ewma15 + self.alpha_15 * askRate0
             self.bidRate0_ewma15 = (1. - self.alpha_15) * self.bidRate0_ewma15 + self.alpha_15 * bidRate0
 
+            # Distance to big trades
+            self.distToBigTradeBid_var_ewma10 = (1. - self.alpha_10) * (self.distToBigTradeBid_var_ewma10 + self.bias_10 * self.alpha_10 * (distToBigTradeBid - self.distToBigTradeBid_ewma10) * (distToBigTradeBid - self.distToBigTradeBid_ewma10))
+            self.distToBigTradeAsk_var_ewma10 = (1. - self.alpha_10) * (self.distToBigTradeAsk_var_ewma10 + self.bias_10 * self.alpha_10 * (distToBigTradeAsk - self.distToBigTradeAsk_ewma10) * (distToBigTradeAsk - self.distToBigTradeAsk_ewma10))
+            self.distToBigTradeBid_vol_ewma10 = np.sqrt(self.distToBigTradeBid_var_ewma10)
+            self.distToBigTradeAsk_vol_ewma10 = np.sqrt(self.distToBigTradeAsk_var_ewma10)
+            self.distToBigTradeBid_ewma10 = (1. - self.alpha_10) * self.distToBigTradeBid_ewma10 + self.alpha_10 * distToBigTradeBid
+            self.distToBigTradeAsk_ewma10 = (1. - self.alpha_10) * self.distToBigTradeAsk_ewma10 + self.alpha_10 * distToBigTradeAsk
+
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
         self.sig2 = (bidSize1 - askSize1) / (bidSize1 + askSize1)
@@ -248,9 +264,10 @@ class MySubmission(Submission):
         self.sig8 = ((bidRate1 - bidRate2) - (askRate2 - askRate1)) / ((bidRate1 - bidRate2) + (askRate2 - askRate1))
         self.sig9 = (mid_mic - self.midMic_ewma10) / self.midMic_vol_ewma10
         self.sig10 = bidRate0 - self.bidRate0_ewma15 + askRate0 - self.askRate0_ewma15
+        self.sig11 = (distToBigTradeBid - self.distToBigTradeBid_ewma10) / self.distToBigTradeBid_vol_ewma10 - (distToBigTradeAsk - self.distToBigTradeAsk_ewma10) / self.distToBigTradeAsk_vol_ewma10
         #################
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
@@ -264,14 +281,13 @@ class MySubmission(Submission):
 
         signals = self.signals[self.turn:self.turn + 1, :]
         prediction_static = self.model_static.predict(signals)[0]
-        prediction_bagging = self.model_bagging.predict(signals)[0]
 
         if self.turn >= self.running_model_first_fit_turn:
             prediction_expanding = self.model_expanding.predict(signals)[0]
             prediction_running = self.model_running.predict(signals)[0]
-            prediction = 0.25 * (prediction_static + prediction_expanding + prediction_running + prediction_bagging)
+            prediction = 0.3333 * (prediction_static + prediction_expanding + prediction_running)
         else:
-            prediction = 0.5 * (prediction_static + prediction_bagging)
+            prediction = prediction_static
 
         if not np.isfinite(prediction):
             prediction = 0.
