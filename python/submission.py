@@ -267,9 +267,10 @@ class MySubmission(Submission):
         self.sig9 = (mid_mic - self.midMic_ewma10) / self.midMic_vol_ewma10
         self.sig10 = bidRate0 - self.bidRate0_ewma15 + askRate0 - self.askRate0_ewma15
         self.sig11 = (self.bid_nbr_trades[turn] - self.bid_nbr_trades_ewma_10) / self.bid_nbr_trades_vol_ewma_10 - (self.ask_nbr_trades[turn] - self.ask_nbr_trades_ewma_10) / self.ask_nbr_trades_vol_ewma_10
+        self.sig12 = ((bidSize0 - self.bidSize0_ewma50) / self.bidSize0_vol_ewma50)**3 - ((askSize0 - self.askSize0_ewma50) / self.askSize0_vol_ewma50)**3
         #################
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig12])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
