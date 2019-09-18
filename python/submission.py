@@ -36,6 +36,9 @@ class MySubmission(Submission):
         self.y = np.zeros(self.ARRAY_SIZE)
         self.y_pred = np.zeros(self.ARRAY_SIZE)
         self.signals = np.zeros((self.ARRAY_SIZE, len(self.model_static.coef_)))
+        self.bid_nbr_trades = np.zeros(self.ARRAY_SIZE)
+        self.ask_nbr_trades = np.zeros(self.ARRAY_SIZE)
+        self.prev_row = None
 
         super().__init__()
 
@@ -49,10 +52,15 @@ class MySubmission(Submission):
         data = [float(x) if x else 0 for x in data.split(',')]
         self.x = data
 
+        if not self.prev_row:
+            self.prev_row = data
+
         if self.turn == self.ARRAY_SIZE - 10:
             self.mids.resize(2 * len(self.mids))
             self.y.resize(2 * len(self.y))
             self.y_pred.resize(2 * len(self.y_pred))
+            self.self.bid_nbr_trades.resize(2 * len(self.signals))
+            self.self.ask_nbr_trades.resize(2 * len(self.signals))
             self.signals.resize(2 * len(self.signals))
             self.ARRAY_SIZE = 2 * self.ARRAY_SIZE
 
@@ -112,6 +120,8 @@ class MySubmission(Submission):
         bidRate0 = x[30] if x[30] != 0. else np.nan
         bidRate1 = x[31] if x[31] != 0. else np.nan
         bidRate2 = x[32] if x[32] != 0. else np.nan
+        askRate0_prev = self.prev_row[0] if self.prev_row[0] != 0. else np.nan
+        bidRate0_prev = self.prev_row[30] if self.prev_row[30] != 0. else np.nan
 
         askSize0 = x[15]
         askSize1 = x[16]
@@ -119,25 +129,39 @@ class MySubmission(Submission):
         bidSize0 = x[45]
         bidSize1 = x[46]
         bidSize2 = x[47]
+        askSize0_prev = self.prev_row[15]
+        bidSize0_prev = self.prev_row[45]
 
         askSize012 = askSize0 + askSize1 + askSize2
         bidSize012 = bidSize0 + bidSize1 + bidSize2
         askSizeTotal = np.sum(x[15:25])
         bidSizeTotal = np.sum(x[45:55])
-        try:
-            distToBigTradeBid = [(e >= 20) for e in x[45:60]].index(True) + 1.
-        except:
-            distToBigTradeBid = None
-        try:
-            distToBigTradeAsk = [(e >= 20) for e in x[15:30]].index(True) + 1.
-        except:
-            distToBigTradeAsk = None
 
         mid = 0.5 * (bidRate0 + askRate0)
         mid_mic = (askSize0 * bidRate0 + bidSize0 * askRate0) / (askSize0 + bidSize0)
         y = mid - self.mids[turn_prev]
         self.mids[turn] = mid
         self.y[turn_prev] = y
+
+        if bidRate0 == bidRate0_prev:
+            if bidSize0 > bidSize0_prev:
+                self.bid_nbr_trades[turn] = self.bid_nbr_trades[turn-1] + 1
+            elif bidSize0 < bidSize0_prev:
+                self.bid_nbr_trades[turn] = self.bid_nbr_trades[turn-1] - 1
+            else:
+                self.bid_nbr_trades[turn] = self.bid_nbr_trades[turn-1]
+        else:
+            self.bid_nbr_trades[turn] = 1
+
+        if askRate0 == askRate0_prev:
+            if askSize0 > askSize0_prev:
+                self.ask_nbr_trades[turn] = self.ask_nbr_trades[turn-1] + 1
+            elif askSize0 < askSize0_prev:
+                self.ask_nbr_trades[turn] = self.ask_nbr_trades[turn-1] - 1
+            else:
+                self.ask_nbr_trades[turn] = self.ask_nbr_trades[turn-1]
+        else:
+            self.ask_nbr_trades[turn] = 1
 
         if ((self.turn + 1) % self.running_model_first_fit_turn) == 0:
             self.model_expanding.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
@@ -176,12 +200,12 @@ class MySubmission(Submission):
             self.askRate0_ewma15 = askRate0
             self.bidRate0_ewma15 = bidRate0
 
-            self.distToBigTradeBid_ewma10 = distToBigTradeBid or 0.
-            self.distToBigTradeAsk_ewma10 = distToBigTradeAsk or 0.
-            self.distToBigTradeBid_var_ewma10 = 0.0001
-            self.distToBigTradeAsk_var_ewma10 = 0.0001
-            self.distToBigTradeBid_vol_ewma10 = np.sqrt(self.distToBigTradeBid_var_ewma10)
-            self.distToBigTradeAsk_vol_ewma10 = np.sqrt(self.distToBigTradeAsk_var_ewma10)
+            self.bid_nbr_trades_ewma_10 = self.bid_nbr_trades[turn]
+            self.ask_nbr_trades_ewma_10 = self.ask_nbr_trades[turn]
+            self.bid_nbr_trades_var_ewma_10 = 0.0001
+            self.ask_nbr_trades_var_ewma_10 = 0.0001
+            self.bid_nbr_trades_vol_ewma_10 = math.sqrt(self.bid_nbr_trades_var_ewma_10)
+            self.ask_nbr_trades_vol_ewma_10 = math.sqrt(self.ask_nbr_trades_var_ewma_10)
 
         else:
 
@@ -223,15 +247,13 @@ class MySubmission(Submission):
             self.askRate0_ewma15 = (1. - self.alpha_15) * self.askRate0_ewma15 + self.alpha_15 * askRate0
             self.bidRate0_ewma15 = (1. - self.alpha_15) * self.bidRate0_ewma15 + self.alpha_15 * bidRate0
 
-            # Distance to big trades
-            if distToBigTradeBid:
-                self.distToBigTradeBid_var_ewma10 = (1. - self.alpha_10) * (self.distToBigTradeBid_var_ewma10 + self.bias_10 * self.alpha_10 * (distToBigTradeBid - self.distToBigTradeBid_ewma10)**2)
-                self.distToBigTradeBid_vol_ewma10 = np.sqrt(self.distToBigTradeBid_var_ewma10)
-                self.distToBigTradeBid_ewma10 = (1. - self.alpha_10) * self.distToBigTradeBid_ewma10 + self.alpha_10 * distToBigTradeBid
-            if distToBigTradeAsk:
-                self.distToBigTradeAsk_var_ewma10 = (1. - self.alpha_10) * (self.distToBigTradeAsk_var_ewma10 + self.bias_10 * self.alpha_10 * (distToBigTradeAsk - self.distToBigTradeAsk_ewma10)**2)
-                self.distToBigTradeAsk_vol_ewma10 = np.sqrt(self.distToBigTradeAsk_var_ewma10)
-                self.distToBigTradeAsk_ewma10 = (1. - self.alpha_10) * self.distToBigTradeAsk_ewma10 + self.alpha_10 * distToBigTradeAsk
+            # Nbr trades bid and ask
+            self.bid_nbr_trades_var_ewma_10 = (1. - self.alpha_10) * (self.bid_nbr_trades_var_ewma_10 + self.bias_10 * self.alpha_10 * (self.bid_nbr_trades[turn] - self.bid_nbr_trades_ewma_10)**2)
+            self.ask_nbr_trades_var_ewma_10 = (1. - self.alpha_10) * (self.ask_nbr_trades_var_ewma_10 + self.bias_10 * self.alpha_10 * (self.ask_nbr_trades[turn] - self.ask_nbr_trades_ewma_10)**2)
+            self.bid_nbr_trades_vol_ewma_10 = math.sqrt(self.bid_nbr_trades_var_ewma_10)
+            self.ask_nbr_trades_vol_ewma_10 = math.sqrt(self.ask_nbr_trades_var_ewma_10)
+            self.bid_nbr_trades_ewma_10 = (1. - self.alpha_10) * self.bid_nbr_trades_ewma_10 + self.alpha_10 * self.bid_nbr_trades[turn]
+            self.ask_nbr_trades_ewma_10 = (1. - self.alpha_10) * self.ask_nbr_trades_ewma_10 + self.alpha_10 * self.ask_nbr_trades[turn]
 
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
@@ -244,18 +266,14 @@ class MySubmission(Submission):
         self.sig8 = ((bidRate1 - bidRate2) - (askRate2 - askRate1)) / ((bidRate1 - bidRate2) + (askRate2 - askRate1))
         self.sig9 = (mid_mic - self.midMic_ewma10) / self.midMic_vol_ewma10
         self.sig10 = bidRate0 - self.bidRate0_ewma15 + askRate0 - self.askRate0_ewma15
-
-        self.sig11 = 0.
-        if distToBigTradeBid:
-            self.sig11 += (distToBigTradeBid - self.distToBigTradeBid_ewma10) / self.distToBigTradeBid_vol_ewma10
-        if distToBigTradeAsk:
-            self.sig11 -= (distToBigTradeAsk - self.distToBigTradeAsk_ewma10) / self.distToBigTradeAsk_vol_ewma10
+        self.sig11 = (self.bid_nbr_trades[turn] - self.bid_nbr_trades_ewma_10) / self.bid_nbr_trades_vol_ewma_10 - (self.ask_nbr_trades[turn] - self.ask_nbr_trades_ewma_10) / self.ask_nbr_trades_vol_ewma_10
         #################
 
         signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
+        self.prev_row = self.x
 
         return
 
