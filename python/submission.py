@@ -85,7 +85,7 @@ class MySubmission(Submission):
     """
     Compute zscore of input with given window
     """
-    def z_score(self, x, name, n, reset):
+    def compute_z_score(self, x, name, n, reset):
 
         var_name = name + '_var_ewm'
         vol_name = name + '_vol_ewm'
@@ -102,7 +102,7 @@ class MySubmission(Submission):
             setattr(self, vol_name, math.sqrt(getattr(self, var_name)))
             setattr(self, ewma_name, (1. - alpha) * getattr(self, ewma_name) + alpha * x)
 
-        setattr(self, name + '_zscore', (x - getattr(self, ewma_name)) / getattr(self, vol_name))
+        return (x - getattr(self, ewma_name)) / getattr(self, vol_name)
 
 
     """
@@ -167,110 +167,38 @@ class MySubmission(Submission):
             self.model_expanding.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
             self.model_running.fit(self.signals[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev], self.y[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev])
 
-        if (self.turn == 0) or self.is_new_day():
+        is_reset = (self.turn == 0) or self.is_new_day()
 
-            self.bidSize0_var_ewma50 = 0.0001
-            self.askSize0_var_ewma50 = 0.0001
-            self.bidSize0_vol_ewma50 = math.sqrt(self.bidSize0_var_ewma50)
-            self.askSize0_vol_ewma50 = math.sqrt(self.askSize0_var_ewma50)
+        bidSize0_zscore = self.compute_z_score(bidSize0, 'bidSize0', 50, is_reset)
+        askSize0_zscore = self.compute_z_score(askSize0, 'askSize0', 50, is_reset)
 
-            self.bidSize0_ewma50 = bidSize0
-            self.askSize0_ewma50 = askSize0
-            self.bidSize1_ewma50 = bidSize1
-            self.askSize1_ewma50 = askSize1
+        bidSize012_zscore = self.compute_z_score(bidSize012, 'bidSize012', 50, is_reset)
+        askSize012_zscore = self.compute_z_score(askSize012, 'askSize012', 50, is_reset)
 
-            self.askSize012_ewma50 = askSize012
-            self.bidSize012_ewma50 = bidSize012
-            self.askSizeTotal_ewma20 = askSizeTotal
-            self.bidSizeTotal_ewma20 = bidSizeTotal
+        bidSizeTotal_zscore = self.compute_z_score(bidSizeTotal, 'bidSizeTotal', 20, is_reset)
+        askSizeTotal_zscore = self.compute_z_score(askSizeTotal, 'askSizeTotal', 20, is_reset)
 
-            self.askSize012_var_ewma50 = 0.0001
-            self.bidSize012_var_ewma50 = 0.0001
-            self.askSize012_vol_ewma50 = math.sqrt(self.askSize012_var_ewma50)
-            self.bidSize012_vol_ewma50 = math.sqrt(self.bidSize012_var_ewma50)
-            self.askSizeTotal_var_ewma20 = 0.0001
-            self.bidSizeTotal_var_ewma20 = 0.0001
-            self.askSizeTotal_vol_ewma20 = math.sqrt(self.askSizeTotal_var_ewma20)
-            self.bidSizeTotal_vol_ewma20 = math.sqrt(self.bidSizeTotal_var_ewma20)
+        midMic_zscore = self.compute_z_score(mid_mic, 'mid_mic', 10, is_reset)
 
-            self.midMic_ewma10 = mid_mic
-            self.midMic_var_ewma10 = 0.0001
-            self.midMic_vol_ewma10 = math.sqrt(self.midMic_var_ewma10)
+        nbrTradesBid_zscore = self.compute_z_score(self.bid_nbr_trades[turn], 'nbrTradesBid', 10, is_reset)
+        nbrTradesAsk_zscore = self.compute_z_score(self.ask_nbr_trades[turn], 'nbrTradesAsk', 10, is_reset)
 
-            self.askRate0_ewma15 = askRate0
-            self.bidRate0_ewma15 = bidRate0
-
-            self.bid_nbr_trades_ewma_10 = self.bid_nbr_trades[turn]
-            self.ask_nbr_trades_ewma_10 = self.ask_nbr_trades[turn]
-            self.bid_nbr_trades_var_ewma_10 = 0.0001
-            self.ask_nbr_trades_var_ewma_10 = 0.0001
-            self.bid_nbr_trades_vol_ewma_10 = math.sqrt(self.bid_nbr_trades_var_ewma_10)
-            self.ask_nbr_trades_vol_ewma_10 = math.sqrt(self.ask_nbr_trades_var_ewma_10)
-
-        else:
-
-            # bidSize0 and askSize0 ewma
-            self.bidSize0_var_ewma50 = (1. - self.alpha_50) * (self.bidSize0_var_ewma50 + self.bias_50 * self.alpha_50 * (bidSize0 - self.bidSize0_ewma50)**2)
-            self.askSize0_var_ewma50 = (1. - self.alpha_50) * (self.askSize0_var_ewma50 + self.bias_50 * self.alpha_50 * (askSize0 - self.askSize0_ewma50)**2)
-            self.bidSize0_vol_ewma50 = math.sqrt(self.bidSize0_var_ewma50)
-            self.askSize0_vol_ewma50 = math.sqrt(self.askSize0_var_ewma50)
-
-            self.bidSize0_ewma50 = (1. - self.alpha_50) * self.bidSize0_ewma50 + self.alpha_50 * bidSize0
-            self.askSize0_ewma50 = (1. - self.alpha_50) * self.askSize0_ewma50 + self.alpha_50 * askSize0
-
-            # bidSize1 and askSize1 ewma
-            self.bidSize1_ewma50 = (1. - self.alpha_50) * self.bidSize1_ewma50 + self.alpha_50 * bidSize1
-            self.askSize1_ewma50 = (1. - self.alpha_50) * self.askSize1_ewma50 + self.alpha_50 * askSize1
-
-            # bidSizeTotal and askSizeTotal ewma
-            self.askSize012_var_ewma50 = (1. - self.alpha_50) * (self.askSize012_var_ewma50 + self.bias_50 * self.alpha_50 * (askSize012 - self.askSize012_ewma50)**2)
-            self.bidSize012_var_ewma50 = (1. - self.alpha_50) * (self.bidSize012_var_ewma50 + self.bias_50 * self.alpha_50 * (bidSize012 - self.bidSize012_ewma50)**2)
-            self.askSize012_vol_ewma50 = math.sqrt(self.askSize012_var_ewma50)
-            self.bidSize012_vol_ewma50 = math.sqrt(self.bidSize012_var_ewma50)
-            self.askSizeTotal_var_ewma20 = (1. - self.alpha_20) * (self.askSizeTotal_var_ewma20 + self.bias_20 * self.alpha_20 * (askSizeTotal - self.askSizeTotal_ewma20)**2)
-            self.bidSizeTotal_var_ewma20 = (1. - self.alpha_20) * (self.bidSizeTotal_var_ewma20 + self.bias_20 * self.alpha_20 * (bidSizeTotal - self.bidSizeTotal_ewma20)**2)
-            self.askSizeTotal_vol_ewma20 = math.sqrt(self.askSizeTotal_var_ewma20)
-            self.bidSizeTotal_vol_ewma20 = math.sqrt(self.bidSizeTotal_var_ewma20)
-
-            self.askSize012_ewma50 = (1. - self.alpha_50) * self.askSize012_ewma50 + self.alpha_50 * askSize012
-            self.bidSize012_ewma50 = (1. - self.alpha_50) * self.bidSize012_ewma50 + self.alpha_50 * bidSize012
-            self.askSizeTotal_ewma20 = (1. - self.alpha_20) * self.askSizeTotal_ewma20 + self.alpha_20 * askSizeTotal
-            self.bidSizeTotal_ewma20 = (1. - self.alpha_20) * self.bidSizeTotal_ewma20 + self.alpha_20 * bidSizeTotal
-
-            # Micro mid zscore
-            self.midMic_var_ewma10 = (1. - self.alpha_10) * (self.midMic_var_ewma10 + self.bias_10 * self.alpha_10 * (mid_mic - self.midMic_ewma10)**2)
-            self.midMic_vol_ewma10 = math.sqrt(self.midMic_var_ewma10)
-
-            self.midMic_ewma10 = (1. - self.alpha_10) * self.midMic_ewma10 + self.alpha_10 * mid_mic
-
-            # AskRate and bidRate
-            self.askRate0_ewma15 = (1. - self.alpha_15) * self.askRate0_ewma15 + self.alpha_15 * askRate0
-            self.bidRate0_ewma15 = (1. - self.alpha_15) * self.bidRate0_ewma15 + self.alpha_15 * bidRate0
-
-            # Nbr trades bid and ask
-            self.bid_nbr_trades_var_ewma_10 = (1. - self.alpha_10) * (self.bid_nbr_trades_var_ewma_10 + self.bias_10 * self.alpha_10 * (self.bid_nbr_trades[turn] - self.bid_nbr_trades_ewma_10)**2)
-            self.ask_nbr_trades_var_ewma_10 = (1. - self.alpha_10) * (self.ask_nbr_trades_var_ewma_10 + self.bias_10 * self.alpha_10 * (self.ask_nbr_trades[turn] - self.ask_nbr_trades_ewma_10)**2)
-            self.bid_nbr_trades_vol_ewma_10 = math.sqrt(self.bid_nbr_trades_var_ewma_10)
-            self.ask_nbr_trades_vol_ewma_10 = math.sqrt(self.ask_nbr_trades_var_ewma_10)
-            self.bid_nbr_trades_ewma_10 = (1. - self.alpha_10) * self.bid_nbr_trades_ewma_10 + self.alpha_10 * self.bid_nbr_trades[turn]
-            self.ask_nbr_trades_ewma_10 = (1. - self.alpha_10) * self.ask_nbr_trades_ewma_10 + self.alpha_10 * self.ask_nbr_trades[turn]
 
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
         self.sig2 = (bidSize1 - askSize1) / (bidSize1 + askSize1)
-        self.sig3 = (bidSize012 - self.bidSize012_ewma50) / self.bidSize012_vol_ewma50 - (askSize012 - self.askSize012_ewma50) / self.askSize012_vol_ewma50
+        self.sig3 = bidSize012_zscore - askSize012_zscore
         self.sig4 = bidSize1 / bidSize0 - askSize1 / askSize0
-        self.sig5 = (bidSize0 - self.bidSize0_ewma50) / self.bidSize0_vol_ewma50 - (askSize0 - self.askSize0_ewma50) / self.askSize0_vol_ewma50
-        self.sig6 = (bidSizeTotal - self.bidSizeTotal_ewma20) / self.bidSizeTotal_vol_ewma20 - (askSizeTotal - self.askSizeTotal_ewma20) / self.askSizeTotal_vol_ewma20
+        self.sig5 = bidSize0_zscore - askSize0_zscore
+        self.sig6 = bidSizeTotal_zscore - askSizeTotal_zscore
         self.sig7 = (askRate1 - askRate0) - (bidRate0 - bidRate1)
         self.sig8 = ((bidRate1 - bidRate2) - (askRate2 - askRate1)) / ((bidRate1 - bidRate2) + (askRate2 - askRate1))
-        self.sig9 = (mid_mic - self.midMic_ewma10) / self.midMic_vol_ewma10
-        self.sig10 = bidRate0 - self.bidRate0_ewma15 + askRate0 - self.askRate0_ewma15
-        self.sig11 = (self.bid_nbr_trades[turn] - self.bid_nbr_trades_ewma_10) / self.bid_nbr_trades_vol_ewma_10 - (self.ask_nbr_trades[turn] - self.ask_nbr_trades_ewma_10) / self.ask_nbr_trades_vol_ewma_10
-        self.sig12 = ((bidSize0 - self.bidSize0_ewma50) / self.bidSize0_vol_ewma50)**3 - ((askSize0 - self.askSize0_ewma50) / self.askSize0_vol_ewma50)**3
+        self.sig9 = midMic_zscore
+        self.sig11 = nbrTradesBid_zscore - nbrTradesAsk_zscore
         #################
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig12])
+
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
@@ -307,12 +235,9 @@ class MySubmission(Submission):
     def run_submission(self):
 
         while(True):
-            #start = time.time()
             self.update_data()
             self.update_features()
             prediction = self.get_prediction()
-
-            #prediction = (time.time() - start) * 1000
             self.submit_prediction(prediction)
 
             self.turn += 1
