@@ -10,11 +10,10 @@ class MySubmission(Submission):
     def __init__(self):
         self.turn = 0
         self.ARRAY_SIZE = 5000000
-        self.running_model_first_fit_turn = 100000
+        self.running_model_first_fit_turn = 200000
 
         self.model_static = pickle.load(open('model.sav', 'rb'))
-        self.model_running1 = HuberRegressor(fit_intercept=False, epsilon=1.35)
-        self.model_running2 = HuberRegressor(fit_intercept=False, epsilon=1.35)
+        self.model_running = HuberRegressor(fit_intercept=False, epsilon=1.35)
         self.model_expanding = HuberRegressor(fit_intercept=False, epsilon=1.35)
 
         self.mids = np.zeros(self.ARRAY_SIZE)
@@ -150,10 +149,7 @@ class MySubmission(Submission):
 
         if ((self.turn + 1) % self.running_model_first_fit_turn) == 0:
             self.model_expanding.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
-            self.model_running1.fit(self.signals[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev], self.y[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev])
-
-        if ((self.turn + 1) % 50000) == 0:
-            self.model_running2.fit(self.signals[max(turn_prev - 50000 + 1, 0):turn_prev], self.y[max(turn_prev - 50000 + 1, 0):turn_prev])
+            self.model_running.fit(self.signals[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev], self.y[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev])
 
         is_reset = (self.turn == 0) or self.is_new_day()
 
@@ -204,9 +200,8 @@ class MySubmission(Submission):
 
         if self.turn >= self.running_model_first_fit_turn:
             prediction_expanding = self.model_expanding.predict(signals)[0]
-            prediction_running1 = self.model_running1.predict(signals)[0]
-            prediction_running2 = self.model_running2.predict(signals)[0]
-            prediction = 0.25 * (prediction_static + prediction_expanding + prediction_running1 + prediction_running2)
+            prediction_running = self.model_running1.predict(signals)[0]
+            prediction = 0.3333 * (prediction_static + prediction_expanding + prediction_running)
         else:
             prediction = prediction_static
 
