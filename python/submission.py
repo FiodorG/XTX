@@ -10,7 +10,7 @@ class MySubmission(Submission):
     def __init__(self):
         self.turn = 0
         self.ARRAY_SIZE = 5000000
-        self.running_model_first_fit_turn = 200000
+        self.running_model_first_fit_turn = 100000
 
         self.model_static = pickle.load(open('model.sav', 'rb'))
         self.model_running = HuberRegressor(fit_intercept=False, epsilon=1.35)
@@ -238,7 +238,7 @@ class MySubmission(Submission):
             self.update_features()
             prediction = self.get_prediction()
             #prediction = (time.time() - start) * 1000
-            self.submit_prediction(self.sig12)
+            self.submit_prediction(prediction)
 
             self.turn += 1
 
