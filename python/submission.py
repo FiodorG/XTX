@@ -27,11 +27,8 @@ class MySubmission(Submission):
         super().__init__()
 
 
-    """
-    update_data(data) appends new row to existing dataframe
-    """
-    def update_data(self):
 
+    def update_data(self):
         data = self.get_next_data_as_string()
         data = [float(x) if x else 0 for x in data.split(',')]
         self.x = data
@@ -49,12 +46,8 @@ class MySubmission(Submission):
             self.ARRAY_SIZE = 2 * self.ARRAY_SIZE
 
 
-    """
-    is_new_day(self) tries to guess when it's a new session and rolling averages should be restarted.
-    The best I could find for now is that ask depth seems to be thin at start of sessions.
-    """
-    def is_new_day(self):
 
+    def is_new_day(self):
         ask_depth = np.sum(self.x[0:15] != 0.)
 
         if not hasattr(self, 'ask_depth_prev'):
@@ -66,34 +59,57 @@ class MySubmission(Submission):
         return is_reset
 
 
-    """
-    Compute zscore of input with given window
-    """
-    def compute_z_score(self, x, name, n, reset):
 
+    def compute_z_score(self, x, name, n, reset):
         var_name = name + '_var_ewm'
-        vol_name = name + '_vol_ewm'
         ewma_name = name + '_ewma'
 
         if reset:
             setattr(self, var_name, 0.0001)
-            setattr(self, vol_name, math.sqrt(getattr(self, var_name)))
             setattr(self, ewma_name, x)
+
+            return 0.
         else:
             alpha = 2. / (n + 1.)
             bias = (2. - alpha) / 2. / (1. - alpha)
-            setattr(self, var_name, (1. - alpha) * (getattr(self, var_name) + bias * alpha * (x - getattr(self, ewma_name))**2))
-            setattr(self, vol_name, math.sqrt(getattr(self, var_name)))
-            setattr(self, ewma_name, (1. - alpha) * getattr(self, ewma_name) + alpha * x)
 
-        return (x - getattr(self, ewma_name)) / getattr(self, vol_name)
+            avg_prev = getattr(self, ewma_name)
+            variance = (1. - alpha) * (getattr(self, var_name) + bias * alpha * (x - avg_prev)**2)
+            volatility = math.sqrt(variance)
+            average = (1. - alpha) * avg_prev + alpha * x
+
+            setattr(self, var_name, variance)
+            setattr(self, ewma_name, average)
+
+            return (x - average) / volatility
 
 
-    """
-    update_features(self) update features after each new line is added
-    """
+    def get_average_price_depth(self, q, side):
+
+        if side:
+            sizes = np.array(self.x[15:30])
+            rates = np.array(self.x[0:15])
+        else:
+            sizes = np.array(self.x[45:60])
+            rates = np.array(self.x[30:45])
+
+        sizes_cumsum = np.cumsum(sizes)
+        indices = sizes_cumsum <= q
+        last_index = np.sum(indices)
+        if last_index == 0:
+            q_last = q
+        else:
+            q_last = q - sizes_cumsum[max(last_index - 1, 0)]
+        res = np.dot(sizes[indices], rates[indices])
+        if last_index < 15:
+            res += q_last * rates[min(14, last_index)]
+        res /= q
+
+        return res
+
+
+
     def update_features(self):
-
         x = self.x
         turn = self.turn
         turn_prev = max(turn - 87, 0)
@@ -147,6 +163,7 @@ class MySubmission(Submission):
         else:
             self.ask_nbr_trades[turn] = 1
 
+
         if ((self.turn + 1) % self.running_model_first_fit_turn) == 0:
             self.model_expanding.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
             self.model_running.fit(self.signals[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev], self.y[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev])
@@ -167,6 +184,8 @@ class MySubmission(Submission):
         nbrTradesBid_zscore = self.compute_z_score(self.bid_nbr_trades[turn], 'nbrTradesBid', 10, is_reset)
         nbrTradesAsk_zscore = self.compute_z_score(self.ask_nbr_trades[turn], 'nbrTradesAsk', 10, is_reset)
 
+        average_price_bid = self.get_average_price_depth(20, False)
+        average_price_ask = self.get_average_price_depth(20, True)
 
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
@@ -179,10 +198,11 @@ class MySubmission(Submission):
         self.sig8 = ((bidRate1 - bidRate2) - (askRate2 - askRate1)) / ((bidRate1 - bidRate2) + (askRate2 - askRate1))
         self.sig9 = midMic_zscore
         self.sig11 = nbrTradesBid_zscore - nbrTradesAsk_zscore
+        self.sig12 = ((mid - average_price_bid) - (average_price_ask - mid)) / ((mid - average_price_bid) + (average_price_ask - mid))
         #################
 
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig12])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
@@ -190,17 +210,14 @@ class MySubmission(Submission):
 
         return
 
-    """
-    get_prediction(data) expects a row of data from data.csv as input and should return a float that represents a prediction for the supplied row of data
-    """
-    def get_prediction(self):
 
+    def get_prediction(self):
         signals = self.signals[self.turn:self.turn + 1, :]
         prediction_static = self.model_static.predict(signals)[0]
 
         if self.turn >= self.running_model_first_fit_turn:
             prediction_expanding = self.model_expanding.predict(signals)[0]
-            prediction_running = self.model_running1.predict(signals)[0]
+            prediction_running = self.model_running.predict(signals)[0]
             prediction = 0.3333 * (prediction_static + prediction_expanding + prediction_running)
         else:
             prediction = prediction_static
@@ -213,16 +230,15 @@ class MySubmission(Submission):
         return prediction
 
 
-    """
-    run_submission() will iteratively fetch the next row of data in the format specified for every prediction submitted to self.submit_prediction()
-    """
-    def run_submission(self):
 
+    def run_submission(self):
         while(True):
+            #start = time.time()
             self.update_data()
             self.update_features()
             prediction = self.get_prediction()
-            self.submit_prediction(prediction)
+            #prediction = (time.time() - start) * 1000
+            self.submit_prediction(self.sig12)
 
             self.turn += 1
 
