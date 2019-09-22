@@ -13,6 +13,7 @@ class MySubmission(Submission):
         self.running_model_first_fit_turn = 100000
 
         self.model_static = pickle.load(open('model.sav', 'rb'))
+        self.model_xgb = pickle.load(open('modelxgb.sav', 'rb'))
         self.model_running = HuberRegressor(fit_intercept=False, epsilon=1.35)
         self.model_expanding = HuberRegressor(fit_intercept=False, epsilon=1.35)
 
@@ -184,8 +185,8 @@ class MySubmission(Submission):
         nbrTradesBid_zscore = self.compute_z_score(self.bid_nbr_trades[turn], 'nbrTradesBid', 10, is_reset)
         nbrTradesAsk_zscore = self.compute_z_score(self.ask_nbr_trades[turn], 'nbrTradesAsk', 10, is_reset)
 
-        average_price_bid = self.get_average_price_depth(20, False)
-        average_price_ask = self.get_average_price_depth(20, True)
+        #average_price_bid = self.get_average_price_depth(20, False)
+        #average_price_ask = self.get_average_price_depth(20, True)
 
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
@@ -198,11 +199,11 @@ class MySubmission(Submission):
         self.sig8 = ((bidRate1 - bidRate2) - (askRate2 - askRate1)) / ((bidRate1 - bidRate2) + (askRate2 - askRate1))
         self.sig9 = midMic_zscore
         self.sig11 = nbrTradesBid_zscore - nbrTradesAsk_zscore
-        self.sig12 = ((mid - average_price_bid) - (average_price_ask - mid)) / ((mid - average_price_bid) + (average_price_ask - mid))
+        #self.sig12 = ((mid - average_price_bid) - (average_price_ask - mid)) / ((mid - average_price_bid) + (average_price_ask - mid))
         #################
 
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig12])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
@@ -214,13 +215,14 @@ class MySubmission(Submission):
     def get_prediction(self):
         signals = self.signals[self.turn:self.turn + 1, :]
         prediction_static = self.model_static.predict(signals)[0]
+        prediction_xgb = self.model_xgb.predict(signals)[0]
 
         if self.turn >= self.running_model_first_fit_turn:
             prediction_expanding = self.model_expanding.predict(signals)[0]
             prediction_running = self.model_running.predict(signals)[0]
-            prediction = 0.3333 * (prediction_static + prediction_expanding + prediction_running)
+            prediction = 0.4 * prediction_xgb + 0.6 * (prediction_static + prediction_expanding + prediction_running)
         else:
-            prediction = prediction_static
+            prediction = 0.5 * (prediction_static + prediction_xgb)
 
         if not np.isfinite(prediction):
             prediction = 0.
