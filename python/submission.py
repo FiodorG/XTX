@@ -1,6 +1,7 @@
 import math, pickle, subprocess, time
 import numpy as np
 import sklearn
+from xgboost.sklearn import XGBRegressor
 from sklearn.linear_model import HuberRegressor
 from core import Submission
 
@@ -220,7 +221,7 @@ class MySubmission(Submission):
         if self.turn >= self.running_model_first_fit_turn:
             prediction_expanding = self.model_expanding.predict(signals)[0]
             prediction_running = self.model_running.predict(signals)[0]
-            prediction = 0.4 * prediction_xgb + 0.6 * (prediction_static + prediction_expanding + prediction_running)
+            prediction = 0.4 * prediction_xgb + 0.6 * 0.3333 * (prediction_static + prediction_expanding + prediction_running)
         else:
             prediction = 0.5 * (prediction_static + prediction_xgb)
 
