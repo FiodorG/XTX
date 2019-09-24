@@ -201,10 +201,11 @@ class MySubmission(Submission):
         self.sig9 = midMic_zscore
         self.sig11 = nbrTradesBid_zscore - nbrTradesAsk_zscore
         #self.sig12 = ((mid - average_price_bid) - (average_price_ask - mid)) / ((mid - average_price_bid) + (average_price_ask - mid))
+        self.sig13 = bidSize012_zscore**3 - askSize012_zscore**3
         #################
 
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig13])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
