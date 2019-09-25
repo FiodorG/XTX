@@ -11,7 +11,6 @@ class MySubmission(Submission):
     def __init__(self):
         self.turn = 0
         self.ARRAY_SIZE = 5000000
-        self.running_model_first_fit_turn = 100000
 
         self.model_static = pickle.load(open('model.sav', 'rb'))
         self.model_xgb = pickle.load(open('modelxgb.sav', 'rb'))
@@ -166,9 +165,11 @@ class MySubmission(Submission):
             self.ask_nbr_trades[turn] = 1
 
 
-        if ((self.turn + 1) % self.running_model_first_fit_turn) == 0:
+        if ((self.turn + 1) % 50000) == 0:
             self.model_expanding.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
-            self.model_running.fit(self.signals[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev], self.y[max(turn_prev - self.running_model_first_fit_turn + 1, 0):turn_prev])
+
+        if ((self.turn + 1) % 100000) == 0:
+            self.model_running.fit(self.signals[max(turn_prev - 100000 + 1, 0):turn_prev], self.y[max(turn_prev - 100000 + 1, 0):turn_prev])
 
         is_reset = (self.turn == 0) or self.is_new_day()
 
@@ -201,11 +202,10 @@ class MySubmission(Submission):
         self.sig9 = midMic_zscore
         self.sig11 = nbrTradesBid_zscore - nbrTradesAsk_zscore
         #self.sig12 = ((mid - average_price_bid) - (average_price_ask - mid)) / ((mid - average_price_bid) + (average_price_ask - mid))
-        self.sig13 = bidSize012_zscore**3 - askSize012_zscore**3
         #################
 
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig13])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
@@ -219,10 +219,13 @@ class MySubmission(Submission):
         prediction_static = self.model_static.predict(signals)[0]
         prediction_xgb = self.model_xgb.predict(signals)[0]
 
-        if self.turn >= self.running_model_first_fit_turn:
+        if self.turn >= 50000:
+            prediction_expanding = self.model_expanding.predict(signals)[0]
+            prediction = 0.333 * (prediction_xgb + prediction_static + prediction_expanding)
+        if self.turn >= 100000:
             prediction_expanding = self.model_expanding.predict(signals)[0]
             prediction_running = self.model_running.predict(signals)[0]
-            prediction = 0.3333 * (prediction_xgb + prediction_static + prediction_expanding)
+            prediction = 0.4 * prediction_xgb + 0.6 * 0.3333 * (prediction_static + prediction_expanding + prediction_running)
         else:
             prediction = 0.5 * (prediction_static + prediction_xgb)
 
