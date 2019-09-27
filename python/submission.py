@@ -23,6 +23,28 @@ class MySubmission(Submission):
         self.signals = np.zeros((self.ARRAY_SIZE, len(self.model_static.coef_)))
         self.bid_nbr_trades = np.zeros(self.ARRAY_SIZE)
         self.ask_nbr_trades = np.zeros(self.ARRAY_SIZE)
+
+        self.posting_bid = np.zeros(self.ARRAY_SIZE)
+        self.posting_bid_sizes = np.zeros(self.ARRAY_SIZE)
+        self.posting_bid_cross = np.zeros(self.ARRAY_SIZE)
+        self.posting_bid_cross_sizes = np.zeros(self.ARRAY_SIZE)
+
+        self.posting_ask = np.zeros(self.ARRAY_SIZE)
+        self.posting_ask_sizes = np.zeros(self.ARRAY_SIZE)
+        self.posting_ask_cross = np.zeros(self.ARRAY_SIZE)
+        self.posting_ask_cross_sizes = np.zeros(self.ARRAY_SIZE)
+
+        self.cancellations_bid = np.zeros(self.ARRAY_SIZE)
+        self.cancellations_bid_sizes = np.zeros(self.ARRAY_SIZE)
+
+        self.cancellations_ask = np.zeros(self.ARRAY_SIZE)
+        self.cancellations_ask_sizes = np.zeros(self.ARRAY_SIZE)
+
+        self.trades_buy = np.zeros(self.ARRAY_SIZE)
+        self.trades_buy_sizes = np.zeros(self.ARRAY_SIZE)
+        self.trades_sell = np.zeros(self.ARRAY_SIZE)
+        self.trades_sell_sizes = np.zeros(self.ARRAY_SIZE)
+
         self.prev_row = None
 
         super().__init__()
@@ -44,6 +66,31 @@ class MySubmission(Submission):
             self.self.bid_nbr_trades.resize(2 * len(self.signals))
             self.self.ask_nbr_trades.resize(2 * len(self.signals))
             self.signals.resize(2 * len(self.signals))
+
+            self.bid_nbr_trades.resize(2 * len(self.signals))
+            self.ask_nbr_trades.resize(2 * len(self.signals))
+
+            self.posting_bid.resize(2 * len(self.signals))
+            self.posting_bid_sizes.resize(2 * len(self.signals))
+            self.posting_bid_cross.resize(2 * len(self.signals))
+            self.posting_bid_cross_sizes.resize(2 * len(self.signals))
+
+            self.posting_ask.resize(2 * len(self.signals))
+            self.posting_ask_sizes.resize(2 * len(self.signals))
+            self.posting_ask_cross.resize(2 * len(self.signals))
+            self.posting_ask_cross_sizes.resize(2 * len(self.signals))
+
+            self.cancellations_bid.resize(2 * len(self.signals))
+            self.cancellations_bid_sizes.resize(2 * len(self.signals))
+
+            self.cancellations_ask.resize(2 * len(self.signals))
+            self.cancellations_ask_sizes.resize(2 * len(self.signals))
+
+            self.trades_buy.resize(2 * len(self.signals))
+            self.trades_buy_sizes.resize(2 * len(self.signals))
+            self.trades_sell.resize(2 * len(self.signals))
+            self.trades_sell_sizes.resize(2 * len(self.signals))
+
             self.ARRAY_SIZE = 2 * self.ARRAY_SIZE
 
 
@@ -83,6 +130,7 @@ class MySubmission(Submission):
             setattr(self, ewma_name, average)
 
             return (x - average) / volatility
+
 
 
     def get_average_price_depth(self, q, side):
@@ -144,6 +192,8 @@ class MySubmission(Submission):
         self.mids[turn] = mid
         self.y[turn_prev] = y
 
+        ################################################
+        ################################################
         if bidRate0 == bidRate0_prev:
             if bidSize0 > bidSize0_prev:
                 self.bid_nbr_trades[turn] = self.bid_nbr_trades[turn-1] + 1
@@ -164,6 +214,58 @@ class MySubmission(Submission):
         else:
             self.ask_nbr_trades[turn] = 1
 
+        ################################################
+        ################################################
+        prev_bid_size = np.array(self.prev_row)[45:60]
+        prev_ask_size = np.array(self.prev_row)[15:30]
+        prev_bid_rate = np.array(self.prev_row)[30:45]
+        prev_ask_rate = np.array(self.prev_row)[0:15]
+
+        #### BID ####
+        if bidRate0 == bidRate0_prev:
+            # New trades added
+            if bidSize0 > bidSize0_prev:
+                self.posting_bid[turn] = 1
+                self.posting_bid_sizes[turn] = bidSize0 - bidSize0_prev
+            # Traded at bid
+            elif bidSize0 < bidSize0_prev:
+                self.cancellations_bid[turn] = 1
+                self.cancellations_bid_sizes[turn] = bidSize0_prev - bidSize0
+
+        elif bidRate0 < bidRate0_prev:
+            # someone traded and consumed some orders up to new best bid
+            self.trades_sell[turn] = 1
+            self.trades_sell_sizes[turn] = np.sum(prev_bid_size[prev_bid_rate >= bidRate0]) - bidSize0
+
+        elif bidRate0 > bidRate0_prev:
+            # Post but above best bid
+            self.posting_bid_cross[turn] = 1
+            self.posting_bid_cross_sizes[turn] = np.sum(prev_ask_size[prev_ask_rate <= bidRate0]) + bidSize0
+        #############
+
+        #### ASK ####
+        if askRate0 == askRate0_prev:
+            # New trades added
+            if askSize0 > askSize0_prev:
+                self.posting_ask[turn] = 1
+                self.posting_ask_sizes[turn] = askSize0 - askSize0_prev
+            # Traded at ask
+            elif askSize0 < askSize0_prev:
+                self.cancellations_ask[turn] = 1
+                self.cancellations_ask_sizes[turn] = askSize0_prev - askSize0
+
+        elif askRate0 > askRate0_prev:
+            # someone traded and consumed some orders up to new best ask
+            self.trades_buy[turn] = 1
+            self.trades_buy_sizes[turn] = np.sum(prev_ask_size[prev_ask_rate <= askRate0]) - askSize0
+
+        elif askRate0 < askRate0_prev:
+            # Post but below best ask
+            self.posting_ask_cross[turn] = 1
+            self.posting_ask_cross_sizes[turn] = np.sum(prev_bid_size[prev_bid_rate >= askRate0]) + askSize0
+
+        ################################################
+        ################################################
 
         if ((self.turn + 1) % 50000) == 0:
             self.model_expanding.fit(self.signals[0:turn_prev], self.y[0:turn_prev])
@@ -190,6 +292,21 @@ class MySubmission(Submission):
         #average_price_bid = self.get_average_price_depth(20, False)
         #average_price_ask = self.get_average_price_depth(20, True)
 
+        sig13_bid = self.posting_bid_sizes[turn] + self.posting_bid_cross_sizes[turn] - self.cancellations_bid_sizes[turn] - self.trades_sell_sizes[turn]
+        sig13_ask = self.posting_ask_sizes[turn] + self.posting_ask_cross_sizes[turn] - self.cancellations_ask_sizes[turn] - self.trades_buy_sizes[turn]
+
+        sig14_bid = self.posting_bid[turn] + self.posting_bid_cross[turn] - self.cancellations_bid[turn] - self.trades_sell[turn]
+        sig14_ask = self.posting_ask[turn] + self.posting_ask_cross[turn] - self.cancellations_ask[turn] - self.trades_buy[turn]
+
+        alpha = 2. / (10. + 1.)
+        bias = (2. - alpha) / 2. / (1. - alpha)
+        if is_reset:
+            self.sig13_ewma = sig13_bid - sig13_ask
+            self.sig14_ewma = sig14_bid - sig14_ask
+        else:
+            self.sig13_ewma = (1. - alpha) * self.sig13_ewma + alpha * (sig13_bid - sig13_ask)
+            self.sig14_ewma = (1. - alpha) * self.sig14_ewma + alpha * (sig14_bid - sig14_ask)
+
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
         self.sig2 = (bidSize1 - askSize1) / (bidSize1 + askSize1)
@@ -202,10 +319,12 @@ class MySubmission(Submission):
         self.sig9 = midMic_zscore
         self.sig11 = nbrTradesBid_zscore - nbrTradesAsk_zscore
         #self.sig12 = ((mid - average_price_bid) - (average_price_ask - mid)) / ((mid - average_price_bid) + (average_price_ask - mid))
+        self.sig13 = self.sig13_ewma
+        self.sig14 = self.sig14_ewma
         #################
 
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig13])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
