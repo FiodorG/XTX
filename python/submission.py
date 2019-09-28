@@ -336,17 +336,17 @@ class MySubmission(Submission):
     def get_prediction(self):
         signals = self.signals[self.turn:self.turn + 1, :]
         prediction_static = self.model_static.predict(signals)[0]
-        prediction_xgb = self.model_xgb.predict(signals)[0]
+        #prediction_xgb = self.model_xgb.predict(signals)[0]
 
         if self.turn >= 50000:
             prediction_expanding = self.model_expanding.predict(signals)[0]
-            prediction = 0.333 * (prediction_xgb + prediction_static + prediction_expanding)
+            prediction = 0.5 * (prediction_static + prediction_expanding)
         if self.turn >= 100000:
             prediction_expanding = self.model_expanding.predict(signals)[0]
             prediction_running = self.model_running.predict(signals)[0]
-            prediction = 0.4 * prediction_xgb + 0.6 * 0.3333 * (prediction_static + prediction_expanding + prediction_running)
+            prediction = 0.3333 * (prediction_static + prediction_expanding + prediction_running)
         else:
-            prediction = 0.5 * (prediction_static + prediction_xgb)
+            prediction = prediction_static
 
         if not np.isfinite(prediction):
             prediction = 0.
