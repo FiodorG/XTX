@@ -319,7 +319,7 @@ class MySubmission(Submission):
         self.sig9 = midMic_zscore
         self.sig11 = nbrTradesBid_zscore - nbrTradesAsk_zscore
         #self.sig12 = ((mid - average_price_bid) - (average_price_ask - mid)) / ((mid - average_price_bid) + (average_price_ask - mid))
-        self.sig13 = self.sig13_ewma
+        self.sig13 = np.clip(self.sig13_ewma, -4., 4.)
         self.sig14 = self.sig14_ewma
         #################
 
