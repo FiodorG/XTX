@@ -304,10 +304,12 @@ class MySubmission(Submission):
             self.sig13_ewma = sig13_bid - sig13_ask
             self.sig14_ewma = sig14_bid - sig14_ask
             self.sig15_ewma = self.cancellations_bid_sizes[turn] - self.cancellations_ask_sizes[turn]
+            self.sig16_ewma = self.posting_bid_cross[turn] - self.posting_ask_cross[turn]
         else:
             self.sig13_ewma = (1. - alpha) * self.sig13_ewma + alpha * (sig13_bid - sig13_ask)
             self.sig14_ewma = (1. - alpha) * self.sig14_ewma + alpha * (sig14_bid - sig14_ask)
             self.sig15_ewma = (1. - alpha) * self.sig15_ewma + alpha * (self.cancellations_bid_sizes[turn] - self.cancellations_ask_sizes[turn])
+            self.sig16_ewma = (1. - alpha) * self.sig16_ewma + alpha * (self.posting_bid_cross[turn] - self.posting_ask_cross[turn])
 
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
@@ -324,10 +326,11 @@ class MySubmission(Submission):
         self.sig13 = np.clip(self.sig13_ewma, -4., 4.)
         self.sig14 = self.sig14_ewma
         self.sig15 = np.clip(self.sig15_ewma, -4., 4.)
+        self.sig16 = self.sig16_ewma
         #################
 
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig13, self.sig15])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig13, self.sig15, self.sig16])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
@@ -347,8 +350,7 @@ class MySubmission(Submission):
         if self.turn >= 100000:
             prediction_expanding = self.model_expanding.predict(signals)[0]
             prediction_running = self.model_running.predict(signals)[0]
-            #prediction = 0.3333 * (prediction_static + prediction_expanding + prediction_running)
-            prediction = 0.5 * (prediction_static + prediction_expanding)
+            prediction = 0.3333 * (prediction_static + prediction_expanding + prediction_running)
         else:
             prediction = prediction_static
 
