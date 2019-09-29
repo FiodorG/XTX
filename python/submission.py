@@ -303,9 +303,11 @@ class MySubmission(Submission):
         if is_reset:
             self.sig13_ewma = sig13_bid - sig13_ask
             self.sig14_ewma = sig14_bid - sig14_ask
+            self.sig15_ewma = self.cancellations_bid_sizes[turn] - self.cancellations_ask_sizes[turn]
         else:
             self.sig13_ewma = (1. - alpha) * self.sig13_ewma + alpha * (sig13_bid - sig13_ask)
             self.sig14_ewma = (1. - alpha) * self.sig14_ewma + alpha * (sig14_bid - sig14_ask)
+            self.sig15_ewma = (1. - alpha) * self.sig15_ewma + alpha * (self.cancellations_bid_sizes[turn] - self.cancellations_ask_sizes[turn])
 
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
@@ -321,10 +323,11 @@ class MySubmission(Submission):
         #self.sig12 = ((mid - average_price_bid) - (average_price_ask - mid)) / ((mid - average_price_bid) + (average_price_ask - mid))
         self.sig13 = np.clip(self.sig13_ewma, -4., 4.)
         self.sig14 = self.sig14_ewma
+        self.sig15 = np.clip(self.sig15_ewma, -4., 4.)
         #################
 
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig13])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig13, self.sig15])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
