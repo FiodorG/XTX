@@ -347,7 +347,8 @@ class MySubmission(Submission):
         if self.turn >= 100000:
             prediction_expanding = self.model_expanding.predict(signals)[0]
             prediction_running = self.model_running.predict(signals)[0]
-            prediction = 0.3333 * (prediction_static + prediction_expanding + prediction_running)
+            #prediction = 0.3333 * (prediction_static + prediction_expanding + prediction_running)
+            prediction = 0.5 * (prediction_static + prediction_expanding)
         else:
             prediction = prediction_static
 
