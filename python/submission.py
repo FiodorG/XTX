@@ -303,13 +303,19 @@ class MySubmission(Submission):
         if is_reset:
             self.sig13_ewma = sig13_bid - sig13_ask
             self.sig14_ewma = sig14_bid - sig14_ask
-            self.sig15_ewma = self.cancellations_bid_sizes[turn] - self.cancellations_ask_sizes[turn]
-            self.sig16_ewma = self.posting_bid_cross[turn] - self.posting_ask_cross[turn]
         else:
             self.sig13_ewma = (1. - alpha) * self.sig13_ewma + alpha * (sig13_bid - sig13_ask)
             self.sig14_ewma = (1. - alpha) * self.sig14_ewma + alpha * (sig14_bid - sig14_ask)
-            self.sig15_ewma = (1. - alpha) * self.sig15_ewma + alpha * (self.cancellations_bid_sizes[turn] - self.cancellations_ask_sizes[turn])
-            self.sig16_ewma = (1. - alpha) * self.sig16_ewma + alpha * (self.posting_bid_cross[turn] - self.posting_ask_cross[turn])
+
+        alpha_mom1 = 2. / (500. + 1.)
+        alpha_mom2 = 2. / (1000. + 1.)
+
+        if is_reset:
+            self.sig15_st_ewma = mid
+            self.sig15_lt_ewma = mid
+        else:
+            self.sig15_st_ewma = (1. - alpha_mom1) * self.sig15_st_ewma + alpha_mom1 * (mid)
+            self.sig15_lt_ewma = (1. - alpha_mom2) * self.sig15_lt_ewma + alpha_mom2 * (mid)
 
         #### Signals ####
         self.sig1 = (bidSize0 - askSize0) / (bidSize0 + askSize0)
@@ -325,12 +331,11 @@ class MySubmission(Submission):
         #self.sig12 = ((mid - average_price_bid) - (average_price_ask - mid)) / ((mid - average_price_bid) + (average_price_ask - mid))
         self.sig13 = np.clip(self.sig13_ewma, -4., 4.)
         self.sig14 = self.sig14_ewma
-        self.sig15 = np.clip(self.sig15_ewma, -4., 4.)
-        self.sig16 = self.sig16_ewma
+        self.sig15 = self.sig15_st_ewma - self.sig15_lt_ewma
         #################
 
 
-        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig13, self.sig15, self.sig16])
+        signals = np.array([self.sig1, self.sig2, self.sig3, self.sig4, self.sig5, self.sig6, self.sig7, self.sig8, self.sig11, self.sig13, self.sig15])
         signals[np.isinf(signals)] = 0.
         signals[np.isnan(signals)] = 0.
         self.signals[turn, :] = signals
@@ -365,11 +370,9 @@ class MySubmission(Submission):
 
     def run_submission(self):
         while(True):
-            #start = time.time()
             self.update_data()
             self.update_features()
             prediction = self.get_prediction()
-            #prediction = (time.time() - start) * 1000
             self.submit_prediction(prediction)
 
             self.turn += 1
